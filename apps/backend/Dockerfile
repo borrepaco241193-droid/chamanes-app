@@ -6,12 +6,14 @@
 # Stage 1: Dependencies
 FROM node:20-alpine AS deps
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm install --only=production && npm cache clean --force
 
 # Stage 2: Build
 FROM node:20-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm install
 COPY . .
@@ -21,6 +23,8 @@ RUN npm run build
 # Stage 3: Production runtime
 FROM node:20-alpine AS runner
 WORKDIR /app
+
+RUN apk add --no-cache openssl
 
 # Security: don't run as root
 RUN addgroup --system --gid 1001 nodejs
