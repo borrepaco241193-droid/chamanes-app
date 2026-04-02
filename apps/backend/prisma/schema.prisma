@@ -1,0 +1,515 @@
+// ============================================================
+// Chamanes — Database Schema
+// Multi-tenant: every table scoped to community_id
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN      // Platform owner — access to all communities
+  COMMUNITY_ADMIN  // Manages one community
+  RESIDENT         // Lives in a unit
+  GUARD            // Controls gate access
+  STAFF            // Maintenance / services worker
+}
+
+enum AccessEventType {
+  ENTRY
+  EXIT
+}
+
+enum AccessMethod {
+  QR_CODE
+  MANUAL_GUARD
+  PLATE_RECOGNITION
+}
+
+enum VisitorPassStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  MAINTENANCE_FEE
+  RESERVATION_FEE
+  FINE
+  OTHER
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ── Community (Tenant) ───────────────────────────────────────
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  city        String
+  state       String
+  country     String   @default("MX")
+  zipCode     String?
+  phone       String?
+  email       String?
+  logoUrl     String?
+  timezone    String   @default("America/Mexico_City")
+  currency    String   @default("MXN")
+  totalUnits  Int      @default(0)
+  isActive    Boolean  @default(true)
+  // JSON config: maintenanceFeeAmount, paymentDueDay, lateFeePct, etc.
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  units         Unit[]
+  communityUsers CommunityUser[]
+  commonAreas   CommonArea[]
+  accessEvents  AccessEvent[]
+  payments      Payment[]
+  staff         Staff[]
+  workOrders    WorkOrder[]
+  visitorPasses VisitorPass[]
+  announcements Announcement[]
+
+  @@map("communities")
+}
+
+// ── Users ─────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  phone        String?
+  firstName    String
+  lastName     String
+  avatarUrl    String?
+  passwordHash String
+  globalRole   UserRole  @default(RESIDENT)
+  isActive     Boolean   @default(true)
+  isVerified   Boolean   @default(false)
+  verifyToken  String?
+  resetToken   String?
+  resetTokenExpiresAt DateTime?
+  lastLoginAt  DateTime?
+  pushToken    String?   // Expo push token for notifications
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  communityUsers CommunityUser[]
+  visitorPasses  VisitorPass[]
+  reservations   Reservation[]
+  payments       Payment[]
+  refreshTokens  RefreshToken[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+// Junction: User ↔ Community with role scoped to that community
+model CommunityUser {
+  id          String   @id @default(cuid())
+  userId      String
+  communityId String
+  role        UserRole
+  isActive    Boolean  @default(true)
+  joinedAt    DateTime @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community     Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  unitResidents UnitResident[]
+
+  @@unique([userId, communityId])
+  @@map("community_users")
+}
+
+// ── Units (Homes) ─────────────────────────────────────────────
+
+model Unit {
+  id          String  @id @default(cuid())
+  communityId String
+  number      String  // e.g. "101", "A-12", "Casa 5"
+  floor       Int?
+  block       String? // Building or block identifier
+  type        String  @default("apartment")
+  sqMeters    Float?
+  parkingSpots Int    @default(0)
+  isOccupied  Boolean @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  community Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  residents UnitResident[]
+  payments  Payment[]
+
+  @@unique([communityId, number])
+  @@map("units")
+}
+
+model UnitResident {
+  id              String    @id @default(cuid())
+  unitId          String
+  communityUserId String
+  isPrimary       Boolean   @default(false) // Primary resident (owner/leaseholder)
+  moveInDate      DateTime?
+  moveOutDate     DateTime?
+  createdAt       DateTime  @default(now())
+
+  unit          Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  communityUser CommunityUser @relation(fields: [communityUserId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, communityUserId])
+  @@map("unit_residents")
+}
+
+// ── Visitor Passes (QR Codes) ─────────────────────────────────
+
+model VisitorPass {
+  id              String            @id @default(cuid())
+  communityId     String
+  createdById     String
+  visitorName     String
+  visitorPhone    String?
+  visitorEmail    String?
+  visitorPhotoUrl String?
+  plateNumber     String?
+  // Signed JWT stored as QR content — verified by guard app
+  qrCode          String            @unique
+  qrCodeImageUrl  String?           // Pre-rendered QR PNG stored in R2
+  status          VisitorPassStatus @default(ACTIVE)
+  validFrom       DateTime
+  validUntil      DateTime
+  maxUses         Int               @default(1)
+  usedCount       Int               @default(0)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  community    Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  accessEvents AccessEvent[]
+
+  @@map("visitor_passes")
+}
+
+// ── Access Events (Gate Log) ──────────────────────────────────
+
+model AccessEvent {
+  id            String          @id @default(cuid())
+  communityId   String
+  visitorPassId String?
+  scannedByGuardId String?
+  type          AccessEventType
+  method        AccessMethod    @default(QR_CODE)
+  personName    String
+  personType    String          @default("visitor") // visitor | resident | staff | delivery
+  plateNumber   String?
+  photoUrl      String?         // Snapshot taken at gate
+  notes         String?
+  isAllowed     Boolean         @default(true)
+  deniedReason  String?
+  createdAt     DateTime        @default(now())
+
+  community   Community    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  visitorPass VisitorPass? @relation(fields: [visitorPassId], references: [id])
+
+  @@index([communityId, createdAt])
+  @@map("access_events")
+}
+
+// ── Common Areas ──────────────────────────────────────────────
+
+model CommonArea {
+  id               String  @id @default(cuid())
+  communityId      String
+  name             String  // "Pool", "BBQ Area", "Gym", "Party Room"
+  description      String?
+  capacity         Int?
+  imageUrl         String?
+  openTime         String  @default("08:00") // "HH:MM" 24h
+  closeTime        String  @default("22:00")
+  slotDurationMins Int     @default(60)
+  maxAdvanceDays   Int     @default(30)  // How far in advance can book
+  requiresApproval Boolean @default(false)
+  hasFee           Boolean @default(false)
+  feeAmount        Decimal @default(0) @db.Decimal(10, 2)
+  rules            String?
+  isActive         Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  community    Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  @@map("common_areas")
+}
+
+model Reservation {
+  id           String            @id @default(cuid())
+  commonAreaId String
+  userId       String
+  communityId  String
+  title        String?
+  startTime    DateTime
+  endTime      DateTime
+  attendees    Int               @default(1)
+  status       ReservationStatus @default(PENDING)
+  notes        String?
+  feeAmount    Decimal           @default(0) @db.Decimal(10, 2)
+  approvedById String?
+  approvedAt   DateTime?
+  cancelledAt  DateTime?
+  cancellationReason String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  commonArea CommonArea @relation(fields: [commonAreaId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@index([communityId, startTime])
+  @@map("reservations")
+}
+
+// ── Payments ──────────────────────────────────────────────────
+
+model Payment {
+  id                    String        @id @default(cuid())
+  communityId           String
+  userId                String
+  unitId                String
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("MXN")
+  type                  PaymentType   @default(MAINTENANCE_FEE)
+  description           String
+  status                PaymentStatus @default(PENDING)
+  stripePaymentIntentId String?       @unique
+  stripeReceiptUrl      String?
+  stripeCustomerId      String?
+  dueDate               DateTime?
+  paidAt                DateTime?
+  periodMonth           Int?          // 1–12
+  periodYear            Int?
+  lateFeeApplied        Boolean       @default(false)
+  lateFeeAmount         Decimal       @default(0) @db.Decimal(10, 2)
+  metadata              Json          @default("{}")
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+  unit      Unit      @relation(fields: [unitId], references: [id])
+
+  @@index([communityId, status, dueDate])
+  @@index([communityId, periodYear, periodMonth])
+  @@map("payments")
+}
+
+// ── Staff ─────────────────────────────────────────────────────
+
+model Staff {
+  id          String    @id @default(cuid())
+  communityId String
+  userId      String    @unique
+  position    String    // "Security Guard", "Maintenance", "Cleaning"
+  department  String?
+  employeeId  String?
+  startDate   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  community   Community             @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  checkIns    StaffCheckIn[]
+  assignments WorkOrderAssignment[]
+
+  @@map("staff")
+}
+
+model StaffCheckIn {
+  id           String    @id @default(cuid())
+  staffId      String
+  checkInTime  DateTime  @default(now())
+  checkOutTime DateTime?
+  hoursWorked  Float?
+  notes        String?
+  locationLat  Float?
+  locationLng  Float?
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, checkInTime])
+  @@map("staff_check_ins")
+}
+
+// ── Work Orders ───────────────────────────────────────────────
+
+model WorkOrder {
+  id          String            @id @default(cuid())
+  communityId String
+  title       String
+  description String
+  category    String            @default("maintenance") // maintenance | cleaning | security | other
+  priority    WorkOrderPriority @default(MEDIUM)
+  status      WorkOrderStatus   @default(OPEN)
+  unitId      String?
+  location    String?           // Free text: "Pool area", "Lobby"
+  imageUrls   String[]
+  dueDate     DateTime?
+  completedAt DateTime?
+  reportedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  community   Community             @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  assignments WorkOrderAssignment[]
+  comments    WorkOrderComment[]
+
+  @@index([communityId, status])
+  @@map("work_orders")
+}
+
+model WorkOrderAssignment {
+  id          String   @id @default(cuid())
+  workOrderId String
+  staffId     String
+  assignedAt  DateTime @default(now())
+  notes       String?
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  staff     Staff     @relation(fields: [staffId], references: [id])
+
+  @@map("work_order_assignments")
+}
+
+model WorkOrderComment {
+  id          String   @id @default(cuid())
+  workOrderId String
+  authorId    String
+  body        String
+  imageUrls   String[]
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@map("work_order_comments")
+}
+
+// ── Announcements ─────────────────────────────────────────────
+
+model Announcement {
+  id          String    @id @default(cuid())
+  communityId String
+  authorId    String
+  title       String
+  body        String
+  imageUrl    String?
+  isPinned    Boolean   @default(false)
+  publishAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, publishAt])
+  @@map("announcements")
+}
+
+// ── Auth & Security ───────────────────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ── Notifications ─────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  type      String    // payment_due | visitor_arrived | reservation_confirmed | work_order | announcement
+  data      Json      @default("{}")
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ── Audit Log ─────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  communityId String?
+  action      String   // e.g. "user.login", "payment.created", "gate.opened"
+  entity      String?  // Table name
+  entityId    String?  // Record ID
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([communityId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
