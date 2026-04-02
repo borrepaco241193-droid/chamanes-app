@@ -1,10 +1,10 @@
 import { FastifyPluginAsync } from 'fastify'
 
 const healthRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get('/', async (req, reply) => {
+  fastify.get('/', async (_req, reply) => {
     const [dbOk, redisOk] = await Promise.all([
       fastify.prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false),
-      fastify.redis.ping().then((r) => r === 'PONG').catch(() => false),
+      fastify.redis.ping().then((res: string) => res === 'PONG').catch(() => false),
     ])
 
     const status = dbOk && redisOk ? 'ok' : 'degraded'
