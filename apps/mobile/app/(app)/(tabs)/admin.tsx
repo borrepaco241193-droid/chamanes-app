@@ -1,12 +1,360 @@
-import { View, Text } from 'react-native'
+import {
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  TouchableOpacity,
+  useWindowDimensions,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Ionicons } from '@expo/vector-icons'
+import { Svg, Rect, Text as SvgText, G } from 'react-native-svg'
+import { useDashboardStats, usePaymentReport, useAccessReport } from '../../../src/hooks/useAdmin'
+import { useAuthStore } from '../../../src/stores/auth.store'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+// ── Stat Card ─────────────────────────────────────────────────
+
+interface StatCardProps {
+  icon: string
+  iconColor: string
+  iconBg: string
+  label: string
+  value: string | number
+  sub?: string
+  subColor?: string
+  badge?: { text: string; bg: string; color: string }
+  half?: boolean
+}
+
+function StatCard({ icon, iconColor, iconBg, label, value, sub, subColor, badge, half }: StatCardProps) {
+  return (
+    <View className={`bg-surface-card border border-surface-border rounded-2xl p-4 ${half ? 'flex-1' : ''}`}>
+      <View className="flex-row items-center justify-between mb-3">
+        <View className={`w-9 h-9 rounded-xl items-center justify-center ${iconBg}`}>
+          <Ionicons name={icon as any} size={18} color={iconColor} />
+        </View>
+        {badge && (
+          <View className={`px-2 py-0.5 rounded-full ${badge.bg}`}>
+            <Text className={`text-xs font-semibold ${badge.color}`}>{badge.text}</Text>
+          </View>
+        )}
+      </View>
+      <Text className="text-white text-2xl font-bold">{value}</Text>
+      <Text className="text-surface-muted text-xs mt-0.5">{label}</Text>
+      {sub && (
+        <Text className={`text-xs mt-1 ${subColor ?? 'text-surface-muted'}`}>{sub}</Text>
+      )}
+    </View>
+  )
+}
+
+// ── Payment Bar Chart ─────────────────────────────────────────
+
+function PaymentBarChart({ data }: { data: { month: string; collected: number }[] }) {
+  const { width } = useWindowDimensions()
+  const chartWidth = width - 80 // account for px-6 + card padding
+  const barAreaHeight = 120
+  const chartHeight = barAreaHeight + 28 // space for labels
+  const paddingH = 4
+
+  const maxVal = Math.max(...data.map((d) => d.collected), 1)
+  const slotWidth = (chartWidth - paddingH * 2) / data.length
+  const barWidth = Math.max(Math.floor(slotWidth * 0.6), 8)
+
+  return (
+    <Svg width={chartWidth} height={chartHeight}>
+      {data.map((item, i) => {
+        const barH = Math.max(item.collected > 0 ? (item.collected / maxVal) * barAreaHeight : 0, item.collected > 0 ? 4 : 0)
+        const x = paddingH + i * slotWidth + (slotWidth - barWidth) / 2
+        const y = barAreaHeight - barH
+
+        return (
+          <G key={`${item.month}-${i}`}>
+            {/* Background track */}
+            <Rect x={x} y={0} width={barWidth} height={barAreaHeight} rx={4} fill="#1E293B" />
+            {/* Value bar */}
+            {barH > 0 && (
+              <Rect x={x} y={y} width={barWidth} height={barH} rx={4} fill="#3B82F6" />
+            )}
+            {/* Value label */}
+            {item.collected > 0 && (
+              <SvgText
+                x={x + barWidth / 2}
+                y={y - 5}
+                textAnchor="middle"
+                fontSize="9"
+                fill="#94A3B8"
+              >
+                {item.collected >= 1000
+                  ? `$${(item.collected / 1000).toFixed(0)}k`
+                  : `$${item.collected}`}
+              </SvgText>
+            )}
+            {/* Month label */}
+            <SvgText
+              x={x + barWidth / 2}
+              y={chartHeight - 4}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#64748B"
+            >
+              {item.month.split(' ')[0]}
+            </SvgText>
+          </G>
+        )
+      })}
+    </Svg>
+  )
+}
+
+// ── Access Bar Chart ──────────────────────────────────────────
+
+function AccessBarChart({ data }: { data: { date: string; entries: number; exits: number; denied: number }[] }) {
+  const { width } = useWindowDimensions()
+  const chartWidth = width - 80
+  const barAreaHeight = 100
+  const chartHeight = barAreaHeight + 28
+  const paddingH = 4
+
+  const maxVal = Math.max(...data.flatMap((d) => [d.entries, d.exits, d.denied]), 1)
+  const slotWidth = (chartWidth - paddingH * 2) / data.length
+  const barW = Math.max(Math.floor(slotWidth / 4) - 1, 4)
+  const groupW = barW * 3 + 6
+
+  return (
+    <Svg width={chartWidth} height={chartHeight}>
+      {data.map((item, i) => {
+        const slotX = paddingH + i * slotWidth
+        const groupX = slotX + (slotWidth - groupW) / 2
+
+        const entryH = Math.max(item.entries > 0 ? (item.entries / maxVal) * barAreaHeight : 0, item.entries > 0 ? 3 : 0)
+        const exitH = Math.max(item.exits > 0 ? (item.exits / maxVal) * barAreaHeight : 0, item.exits > 0 ? 3 : 0)
+        const deniedH = Math.max(item.denied > 0 ? (item.denied / maxVal) * barAreaHeight : 0, item.denied > 0 ? 3 : 0)
+
+        return (
+          <G key={`${item.date}-${i}`}>
+            <Rect x={groupX} y={barAreaHeight - entryH} width={barW} height={entryH} rx={2} fill="#3B82F6" />
+            <Rect x={groupX + barW + 2} y={barAreaHeight - exitH} width={barW} height={exitH} rx={2} fill="#475569" />
+            <Rect x={groupX + barW * 2 + 4} y={barAreaHeight - deniedH} width={barW} height={deniedH} rx={2} fill="#EF4444" />
+            <SvgText
+              x={slotX + slotWidth / 2}
+              y={chartHeight - 4}
+              textAnchor="middle"
+              fontSize="10"
+              fill="#64748B"
+            >
+              {item.date}
+            </SvgText>
+          </G>
+        )
+      })}
+    </Svg>
+  )
+}
+
+// ── Main Screen ───────────────────────────────────────────────
 
 export default function AdminScreen() {
+  const user = useAuthStore((s) => s.user)
+  const isAdmin =
+    user?.role === 'COMMUNITY_ADMIN' ||
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN'
+
+  const { data: stats, isLoading, refetch: refetchStats, isRefetching } = useDashboardStats()
+  const { data: paymentReport, refetch: refetchPayments } = usePaymentReport(6)
+  const { data: accessReport, refetch: refetchAccess } = useAccessReport(7)
+
+  function handleRefresh() {
+    refetchStats()
+    refetchPayments()
+    refetchAccess()
+  }
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center px-6">
+        <Ionicons name="lock-closed-outline" size={48} color="#334155" />
+        <Text className="text-white text-lg font-bold mt-4">Acceso restringido</Text>
+        <Text className="text-surface-muted text-center mt-2 text-sm">
+          Esta sección es solo para administradores de la comunidad.
+        </Text>
+      </SafeAreaView>
+    )
+  }
+
   return (
-    <SafeAreaView className="flex-1 bg-surface items-center justify-center px-6">
-      <Text className="text-4xl mb-4">⚙️</Text>
-      <Text className="text-white text-xl font-bold mb-2">Admin Panel</Text>
-      <Text className="text-surface-muted text-center">Community management dashboard — implemented in Phase 5</Text>
+    <SafeAreaView className="flex-1 bg-surface">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} tintColor="#3B82F6" />
+        }
+      >
+        {/* Header */}
+        <View className="px-6 pt-2 pb-4 flex-row items-center justify-between">
+          <View>
+            <Text className="text-white text-2xl font-bold">Panel Admin</Text>
+            <Text className="text-surface-muted text-xs mt-0.5">
+              {format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleRefresh}
+            className="w-9 h-9 bg-surface-card border border-surface-border rounded-xl items-center justify-center"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="refresh-outline" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+
+        {isLoading ? (
+          <View className="items-center justify-center py-24">
+            <ActivityIndicator color="#3B82F6" size="large" />
+          </View>
+        ) : (
+          <View className="px-6 gap-3 pb-8">
+
+            {/* Units + Residents */}
+            <View className="flex-row gap-3">
+              <StatCard
+                half
+                icon="home-outline"
+                iconColor="#3B82F6"
+                iconBg="bg-blue-500/20"
+                label="Unidades"
+                value={`${stats?.units.occupied ?? 0}/${stats?.units.total ?? 0}`}
+                sub={`${stats?.units.vacant ?? 0} vacantes`}
+              />
+              <StatCard
+                half
+                icon="people-outline"
+                iconColor="#10B981"
+                iconBg="bg-emerald-500/20"
+                label="Residentes"
+                value={stats?.residents ?? 0}
+                sub="activos"
+              />
+            </View>
+
+            {/* Payments */}
+            <StatCard
+              icon="card-outline"
+              iconColor="#F59E0B"
+              iconBg="bg-amber-500/20"
+              label="Pagos pendientes"
+              value={stats?.payments.pending ?? 0}
+              sub={`$${(stats?.payments.collectedThisMonth ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 0 })} MXN recaudados este mes`}
+              subColor="text-emerald-400"
+              badge={
+                (stats?.payments.pending ?? 0) > 0
+                  ? { text: 'Requiere atención', bg: 'bg-orange-500/20', color: 'text-orange-400' }
+                  : { text: 'Al día', bg: 'bg-emerald-500/20', color: 'text-emerald-400' }
+              }
+            />
+
+            {/* Visitors + Staff */}
+            <View className="flex-row gap-3">
+              <StatCard
+                half
+                icon="qr-code-outline"
+                iconColor="#8B5CF6"
+                iconBg="bg-violet-500/20"
+                label="Pases activos"
+                value={stats?.visitors.activePasses ?? 0}
+                sub={`${stats?.visitors.todayEvents ?? 0} eventos hoy`}
+              />
+              <StatCard
+                half
+                icon="shield-checkmark-outline"
+                iconColor="#06B6D4"
+                iconBg="bg-cyan-500/20"
+                label="Personal"
+                value={stats?.staff.onDuty ?? 0}
+                sub="en turno ahora"
+              />
+            </View>
+
+            {/* Work Orders */}
+            <StatCard
+              icon="construct-outline"
+              iconColor="#F43F5E"
+              iconBg="bg-rose-500/20"
+              label="Órdenes de trabajo abiertas"
+              value={stats?.workOrders.open ?? 0}
+              badge={
+                (stats?.workOrders.urgent ?? 0) > 0
+                  ? {
+                      text: `${stats?.workOrders.urgent} urgentes`,
+                      bg: 'bg-red-500/20',
+                      color: 'text-red-400',
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Reservations */}
+            <StatCard
+              icon="calendar-outline"
+              iconColor="#10B981"
+              iconBg="bg-emerald-500/20"
+              label="Reservaciones confirmadas"
+              value={stats?.reservations.upcoming ?? 0}
+              sub="próximas"
+              badge={
+                (stats?.reservations.pending ?? 0) > 0
+                  ? {
+                      text: `${stats?.reservations.pending} por aprobar`,
+                      bg: 'bg-amber-500/20',
+                      color: 'text-amber-400',
+                    }
+                  : undefined
+              }
+            />
+
+            {/* Payment Report Chart */}
+            {paymentReport && paymentReport.length > 0 && (
+              <View className="bg-surface-card border border-surface-border rounded-2xl p-4">
+                <Text className="text-white font-semibold mb-0.5">Recaudación mensual</Text>
+                <Text className="text-surface-muted text-xs mb-4">Últimos 6 meses · MXN</Text>
+                <PaymentBarChart data={paymentReport} />
+                <View className="flex-row items-center gap-1.5 mt-3">
+                  <View className="w-3 h-3 rounded-sm bg-primary-500" />
+                  <Text className="text-surface-muted text-xs">Recaudado</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Access Report Chart */}
+            {accessReport && accessReport.length > 0 && (
+              <View className="bg-surface-card border border-surface-border rounded-2xl p-4">
+                <Text className="text-white font-semibold mb-0.5">Accesos — últimos 7 días</Text>
+                <Text className="text-surface-muted text-xs mb-4">Entradas · Salidas · Rechazados</Text>
+                <AccessBarChart data={accessReport} />
+                <View className="flex-row gap-4 mt-3">
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="w-3 h-3 rounded-sm bg-primary-500" />
+                    <Text className="text-surface-muted text-xs">Entradas</Text>
+                  </View>
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="w-3 h-3 rounded-sm bg-slate-500" />
+                    <Text className="text-surface-muted text-xs">Salidas</Text>
+                  </View>
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="w-3 h-3 rounded-sm bg-red-500" />
+                    <Text className="text-surface-muted text-xs">Rechazados</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   )
 }

@@ -73,6 +73,26 @@ export default function TabsLayout() {
         }}
       />
 
+      {/* Staff — staff, guards, admins (not residents) */}
+      <Tabs.Screen
+        name="staff"
+        options={{
+          title: 'Turno',
+          href: (!isGuard && !isAdmin && user?.communityRole !== 'STAFF') ? null : undefined,
+          tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'people' : 'people-outline'} focused={focused} />,
+        }}
+      />
+
+      {/* Work Orders — residents, staff, admins (not guards) */}
+      <Tabs.Screen
+        name="workorders"
+        options={{
+          title: 'Tareas',
+          href: isGuard ? null : undefined,
+          tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'construct' : 'construct-outline'} focused={focused} />,
+        }}
+      />
+
       {/* Admin — admin only */}
       <Tabs.Screen
         name="admin"
