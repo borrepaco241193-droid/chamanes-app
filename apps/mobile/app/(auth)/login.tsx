@@ -1,110 +1,157 @@
-import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native'
+import {
+  View, Text, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView
+} from 'react-native'
 import { useState } from 'react'
 import { router } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Haptics from 'expo-haptics'
-
-// Full auth logic implemented in Phase 2
-// This is the UI shell
+import { useLogin } from '../../src/hooks/useAuth'
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const login = useLogin()
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter your email and password')
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+    if (!email.trim() || !password) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       return
     }
-    setLoading(true)
-    setError('')
-    // TODO Phase 2: connect to auth store
-    setTimeout(() => {
-      setLoading(false)
-      setError('Auth coming in Phase 2!')
-    }, 1000)
+    login.mutate({ email: email.trim().toLowerCase(), password })
   }
 
+  const errorMessage = login.error instanceof Error ? login.error.message : null
+
   return (
-    <LinearGradient colors={['#0F172A', '#1E293B']} className="flex-1">
+    <LinearGradient colors={['#0F172A', '#1E293B']} style={{ flex: 1 }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-center px-6"
+        style={{ flex: 1 }}
       >
-        {/* Logo / Brand */}
-        <View className="items-center mb-12">
-          <View className="w-20 h-20 rounded-3xl bg-primary-500 items-center justify-center mb-4">
-            <Text className="text-white text-4xl font-bold">C</Text>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo */}
+          <View style={{ alignItems: 'center', marginBottom: 48 }}>
+            <View style={{
+              width: 80, height: 80, borderRadius: 24,
+              backgroundColor: '#3B82F6', alignItems: 'center',
+              justifyContent: 'center', marginBottom: 16,
+              shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.4, shadowRadius: 16, elevation: 12,
+            }}>
+              <Text style={{ color: 'white', fontSize: 40, fontWeight: 'bold' }}>C</Text>
+            </View>
+            <Text style={{ color: 'white', fontSize: 32, fontWeight: 'bold', letterSpacing: -0.5 }}>
+              Chamanes
+            </Text>
+            <Text style={{ color: '#64748B', fontSize: 15, marginTop: 4 }}>
+              Gated Community Management
+            </Text>
           </View>
-          <Text className="text-white text-3xl font-bold">Chamanes</Text>
-          <Text className="text-surface-muted text-base mt-1">Gated Community Management</Text>
-        </View>
 
-        {/* Form */}
-        <View className="gap-4">
-          {error ? (
-            <View className="bg-danger/20 border border-danger/40 rounded-2xl p-3">
-              <Text className="text-danger text-sm text-center">{error}</Text>
+          {/* Error */}
+          {errorMessage ? (
+            <View style={{
+              backgroundColor: '#EF444415', borderColor: '#EF4444',
+              borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 20,
+            }}>
+              <Text style={{ color: '#EF4444', textAlign: 'center', fontSize: 14 }}>
+                {errorMessage}
+              </Text>
             </View>
           ) : null}
 
-          <View>
-            <Text className="text-surface-muted text-sm font-medium mb-2">Email</Text>
-            <TextInput
-              className="bg-surface-card border border-surface-border rounded-2xl px-4 py-4 text-white text-base"
-              placeholder="your@email.com"
-              placeholderTextColor="#64748B"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              returnKeyType="next"
-            />
+          {/* Form */}
+          <View style={{ gap: 16 }}>
+            <View>
+              <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600', marginBottom: 8, letterSpacing: 0.3 }}>
+                CORREO ELECTRÓNICO
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#1E293B', borderColor: login.isError ? '#EF4444' : '#334155',
+                  borderWidth: 1, borderRadius: 16, paddingHorizontal: 18,
+                  paddingVertical: 16, color: 'white', fontSize: 16,
+                }}
+                placeholder="tu@correo.com"
+                placeholderTextColor="#475569"
+                value={email}
+                onChangeText={(t) => { setEmail(t); login.reset() }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                returnKeyType="next"
+                editable={!login.isPending}
+              />
+            </View>
+
+            <View>
+              <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600', marginBottom: 8, letterSpacing: 0.3 }}>
+                CONTRASEÑA
+              </Text>
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  style={{
+                    backgroundColor: '#1E293B', borderColor: login.isError ? '#EF4444' : '#334155',
+                    borderWidth: 1, borderRadius: 16, paddingHorizontal: 18,
+                    paddingVertical: 16, color: 'white', fontSize: 16, paddingRight: 56,
+                  }}
+                  placeholder="••••••••"
+                  placeholderTextColor="#475569"
+                  value={password}
+                  onChangeText={(t) => { setPassword(t); login.reset() }}
+                  secureTextEntry={!showPassword}
+                  autoComplete="password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                  editable={!login.isPending}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: 16, top: 17 }}
+                >
+                  <Text style={{ color: '#64748B', fontSize: 18 }}>
+                    {showPassword ? '🙈' : '👁'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => router.push('/(auth)/forgot-password')}
+              style={{ alignSelf: 'flex-end', marginTop: -4 }}
+            >
+              <Text style={{ color: '#3B82F6', fontSize: 14 }}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleLogin}
+              disabled={login.isPending}
+              style={{
+                backgroundColor: login.isPending ? '#1D4ED8' : '#3B82F6',
+                borderRadius: 16, paddingVertical: 17,
+                alignItems: 'center', marginTop: 8,
+                shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+              }}
+            >
+              {login.isPending
+                ? <ActivityIndicator color="white" />
+                : <Text style={{ color: 'white', fontWeight: '700', fontSize: 17 }}>Iniciar sesión</Text>
+              }
+            </TouchableOpacity>
           </View>
 
-          <View>
-            <Text className="text-surface-muted text-sm font-medium mb-2">Password</Text>
-            <TextInput
-              className="bg-surface-card border border-surface-border rounded-2xl px-4 py-4 text-white text-base"
-              placeholder="••••••••"
-              placeholderTextColor="#64748B"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
-              returnKeyType="done"
-              onSubmitEditing={handleLogin}
-            />
-          </View>
-
-          <TouchableOpacity
-            onPress={() => router.push('/(auth)/forgot-password')}
-            className="self-end -mt-2"
-          >
-            <Text className="text-primary-400 text-sm">Forgot password?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleLogin}
-            disabled={loading}
-            className="bg-primary-500 rounded-2xl py-4 items-center mt-2 active:bg-primary-600"
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-semibold text-base">Sign In</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Footer */}
-        <Text className="text-surface-muted text-center text-xs mt-8">
-          Protected by Chamanes Security System
-        </Text>
+          <Text style={{ color: '#334155', textAlign: 'center', fontSize: 12, marginTop: 40 }}>
+            Chamanes © 2025 — Plataforma de acceso residencial
+          </Text>
+        </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
   )

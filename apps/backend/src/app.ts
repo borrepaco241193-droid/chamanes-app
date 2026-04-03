@@ -26,24 +26,16 @@ export async function buildApp() {
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,
     },
-    trustProxy: true, // Required behind Railway's proxy
-    ajv: {
-      customOptions: {
-        removeAdditional: 'all', // Strip unknown fields from requests
-        coerceTypes: true,
-        allErrors: true,
-      },
-    },
+    trustProxy: true,
   })
 
   // ── Security ──────────────────────────────────────────────
-  await app.register(helmet, {
-    contentSecurityPolicy: false, // Swagger UI needs this off in dev
-  })
+  await app.register(helmet, { contentSecurityPolicy: false })
 
   await app.register(cors, {
-    origin: env.NODE_ENV === 'production' ? env.FRONTEND_URL : true,
+    origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   })
 
   await app.register(rateLimit, {
@@ -57,14 +49,18 @@ export async function buildApp() {
   })
 
   await app.register(multipart, {
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+    limits: { fileSize: 10 * 1024 * 1024 },
   })
 
-  // ── API Documentation (Swagger) ───────────────────────────
+  // ── API Docs ──────────────────────────────────────────────
   if (env.NODE_ENV !== 'production') {
     await app.register(swagger, {
       openapi: {
-        info: { title: 'Chamanes API', description: 'Gated community management platform', version: '1.0.0' },
+        info: {
+          title: 'Chamanes API',
+          description: 'Gated community management platform',
+          version: '1.0.0',
+        },
         components: {
           securitySchemes: {
             bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
@@ -85,19 +81,20 @@ export async function buildApp() {
   await app.register(authRoutes, { prefix: '/api/v1/auth' })
   await app.register(communityRoutes, { prefix: '/api/v1/communities' })
 
-  // ── Global Error Handler ──────────────────────────────────
+  // ── Error handler ─────────────────────────────────────────
   app.setErrorHandler((error, req, reply) => {
     app.log.error({ err: error, url: req.url, method: req.method })
 
-    if (error.validation) {
+    // Zod validation errors
+    if (error.name === 'ZodError') {
       return reply.code(400).send({
         error: 'Validation Error',
         message: 'Invalid request data',
-        details: error.validation,
+        details: JSON.parse(error.message),
       })
     }
 
-    const statusCode = error.statusCode ?? 500
+    const statusCode = (error as any).statusCode ?? 500
     return reply.code(statusCode).send({
       error: statusCode === 500 ? 'Internal Server Error' : error.message,
       message: statusCode === 500 ? 'Something went wrong' : error.message,
@@ -105,7 +102,10 @@ export async function buildApp() {
   })
 
   app.setNotFoundHandler((req, reply) => {
-    reply.code(404).send({ error: 'Not Found', message: `Route ${req.method} ${req.url} not found` })
+    reply.code(404).send({
+      error: 'Not Found',
+      message: `Route ${req.method} ${req.url} not found`,
+    })
   })
 
   return app

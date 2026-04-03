@@ -1,24 +1,25 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import * as SecureStore from 'expo-secure-store'
+import { Platform } from 'react-native'
 import type { AuthUser, AuthTokens } from '@chamanes/shared'
 
 // ============================================================
 // SecureStore adapter for Zustand persist
-// Tokens are stored encrypted on device, never in plain AsyncStorage
+// Falls back to localStorage on web
 // ============================================================
 
-const secureStorage = {
-  getItem: async (name: string) => {
-    return SecureStore.getItemAsync(name)
-  },
-  setItem: async (name: string, value: string) => {
-    await SecureStore.setItemAsync(name, value)
-  },
-  removeItem: async (name: string) => {
-    await SecureStore.deleteItemAsync(name)
-  },
-}
+const secureStorage = Platform.OS === 'web'
+  ? {
+      getItem: async (name: string) => localStorage.getItem(name),
+      setItem: async (name: string, value: string) => localStorage.setItem(name, value),
+      removeItem: async (name: string) => localStorage.removeItem(name),
+    }
+  : {
+      getItem: async (name: string) => SecureStore.getItemAsync(name),
+      setItem: async (name: string, value: string) => SecureStore.setItemAsync(name, value),
+      removeItem: async (name: string) => SecureStore.deleteItemAsync(name),
+    }
 
 interface AuthState {
   user: AuthUser | null

@@ -1,16 +1,20 @@
 import fp from 'fastify-plugin'
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
-import fjwt from '@fastify/jwt'
-import { env } from '../config/env.js'
 import { UserRole } from '@prisma/client'
+import { verifyAccessToken } from '../lib/tokens.js'
 
-// ── JWT payload shape ─────────────────────────────────────────
+// ============================================================
+// Auth plugin — manual JWT verification using jsonwebtoken
+// Replaces @fastify/jwt to avoid its broken dependency chain
+// (asn1.js, steed, etc. not reliably installed in monorepos)
+// ============================================================
+
 export interface JWTPayload {
-  sub: string          // userId
+  sub: string
   email: string
-  role: UserRole       // Global role
-  communityId?: string // Active community context
-  communityRole?: UserRole // Role within that community
+  role: UserRole
+  communityId?: string
+  communityRole?: UserRole
   iat: number
   exp: number
 }
@@ -20,43 +24,41 @@ declare module 'fastify' {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
     requireRole: (...roles: UserRole[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
-}
-
-declare module '@fastify/jwt' {
-  interface FastifyJWT {
-    payload: JWTPayload
+  interface FastifyRequest {
     user: JWTPayload
   }
 }
 
 const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
-  fastify.register(fjwt, {
-    secret: env.JWT_SECRET,
-    sign: { expiresIn: env.JWT_EXPIRES_IN },
-  })
+  // Add user placeholder on every request
+  fastify.decorateRequest('user', null)
 
-  // Middleware: verify JWT on protected routes
+  // authenticate — verifies Bearer token, sets req.user
   fastify.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-      await req.jwtVerify()
-    } catch (err) {
+      const authHeader = req.headers.authorization
+      if (!authHeader?.startsWith('Bearer ')) {
+        return reply.code(401).send({ error: 'Unauthorized', message: 'Missing authorization token' })
+      }
+      const token = authHeader.slice(7)
+      req.user = verifyAccessToken(token)
+    } catch {
       reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' })
     }
   })
 
-  // Middleware: check role after authenticate
+  // requireRole — call AFTER authenticate in preHandler array
   fastify.decorate(
     'requireRole',
     (...roles: UserRole[]) =>
       async (req: FastifyRequest, reply: FastifyReply) => {
         const user = req.user
+        if (!user) {
+          return reply.code(401).send({ error: 'Unauthorized', message: 'Not authenticated' })
+        }
         const effectiveRole = user.communityRole ?? user.role
-
         if (!roles.includes(effectiveRole) && user.role !== UserRole.SUPER_ADMIN) {
-          reply.code(403).send({
-            error: 'Forbidden',
-            message: 'You do not have permission to perform this action',
-          })
+          reply.code(403).send({ error: 'Forbidden', message: 'You do not have permission to perform this action' })
         }
       },
   )

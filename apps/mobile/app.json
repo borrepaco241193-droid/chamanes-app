@@ -4,14 +4,8 @@
     "slug": "chamanes-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "scheme": "chamanes",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0F172A"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
@@ -25,10 +19,6 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F172A"
-      },
       "package": "app.chamanes.mobile",
       "versionCode": 1,
       "permissions": [
@@ -42,8 +32,7 @@
       ]
     },
     "web": {
-      "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
@@ -55,14 +44,7 @@
           "cameraPermission": "Chamanes uses the camera to scan QR codes at the gate."
         }
       ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#3B82F6",
-          "sounds": []
-        }
-      ],
+      "expo-notifications",
       [
         "expo-local-authentication",
         {
@@ -71,13 +53,13 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": false
     },
     "extra": {
       "eas": {
         "projectId": "YOUR_EAS_PROJECT_ID"
       },
-      "apiUrl": "https://chamanes-backend.railway.app"
+      "apiUrl": "http://192.168.1.76:3000"
     }
   }
 }

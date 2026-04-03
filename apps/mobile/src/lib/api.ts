@@ -2,7 +2,12 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import * as SecureStore from 'expo-secure-store'
 import Constants from 'expo-constants'
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000'
+// EXPO_PUBLIC_ variables are inlined at build time by Metro
+// .env.local sets EXPO_PUBLIC_API_URL for local dev
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  Constants.expoConfig?.extra?.apiUrl ??
+  'http://192.168.1.76:3000'
 
 // ============================================================
 // Axios instance with JWT interceptor
