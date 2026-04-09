@@ -10,6 +10,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { usePushNotifications } from '../src/hooks/usePushNotifications'
 import '../global.css'
 
 // Keep splash screen visible while fonts load
@@ -27,6 +28,18 @@ const queryClient = new QueryClient({
     },
   },
 })
+
+function AppContent() {
+  usePushNotifications()
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(app)" />
+    </Stack>
+  )
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -47,11 +60,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-      </Stack>
+      <AppContent />
     </QueryClientProvider>
   )
 }

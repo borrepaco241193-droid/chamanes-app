@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "567497138888",
+    "project_id": "chamanes-app",
+    "storage_bucket": "chamanes-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:567497138888:android:e35fc05009c3d82bc47bfd",
+        "android_client_info": {
+          "package_name": "app.chamanes.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjpLW64YFdj4RNLuA4bjeGSaQW0TO-GBA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

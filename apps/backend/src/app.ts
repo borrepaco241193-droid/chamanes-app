@@ -16,6 +16,13 @@ import authPlugin from './plugins/auth.js'
 import healthRoutes from './modules/health/health.routes.js'
 import authRoutes from './modules/auth/auth.routes.js'
 import communityRoutes from './modules/community/community.routes.js'
+import visitorRoutes from './modules/visitors/visitor.routes.js'
+import paymentRoutes, { stripeWebhookRoute } from './modules/payments/payment.routes.js'
+import reservationRoutes from './modules/reservations/reservation.routes.js'
+import staffRoutes from './modules/staff/staff.routes.js'
+import workOrderRoutes from './modules/workorders/workorder.routes.js'
+import adminRoutes from './modules/admin/admin.routes.js'
+import notificationRoutes from './modules/notifications/notification.routes.js'
 
 export async function buildApp() {
   const app = Fastify({
@@ -80,6 +87,14 @@ export async function buildApp() {
   await app.register(healthRoutes, { prefix: '/health' })
   await app.register(authRoutes, { prefix: '/api/v1/auth' })
   await app.register(communityRoutes, { prefix: '/api/v1/communities' })
+  await app.register(visitorRoutes, { prefix: '/api/v1/communities' })
+  await app.register(paymentRoutes, { prefix: '/api/v1/communities' })
+  await app.register(reservationRoutes, { prefix: '/api/v1/communities' })
+  await app.register(stripeWebhookRoute, { prefix: '/api/v1' })
+  await app.register(staffRoutes, { prefix: '/api/v1/communities' })
+  await app.register(workOrderRoutes, { prefix: '/api/v1/communities' })
+  await app.register(adminRoutes, { prefix: '/api/v1/communities' })
+  await app.register(notificationRoutes, { prefix: '/api/v1/notifications' })
 
   // ── Error handler ─────────────────────────────────────────
   app.setErrorHandler((error, req, reply) => {
