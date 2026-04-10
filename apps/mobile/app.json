@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "scheme": "chamanes",
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.chamanes.mobile",
@@ -29,7 +31,11 @@
         "USE_FINGERPRINT",
         "USE_BIOMETRIC",
         "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED"
+        "RECEIVE_BOOT_COMPLETED",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -48,7 +54,6 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon.png",
           "color": "#6366F1",
           "defaultChannel": "default",
           "sounds": []
@@ -65,10 +70,12 @@
       "typedRoutes": false
     },
     "extra": {
+      "apiUrl": "http://192.168.1.76:3000",
+      "router": {},
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
-      },
-      "apiUrl": "http://192.168.1.76:3000"
-    }
+        "projectId": "54edd6d7-1120-4360-a153-154b1f178ba5"
+      }
+    },
+    "owner": "borre241193"
   }
 }

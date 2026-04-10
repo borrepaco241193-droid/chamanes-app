@@ -16,14 +16,16 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_BACKEND_URL"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": { "buildType": "app-bundle" },
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_BACKEND_URL"
       }
     }
   },
