@@ -101,6 +101,39 @@ export interface ResidentPayment {
 // ── Service ───────────────────────────────────────────────────
 
 export const residentService = {
+  async createUnit(communityId: string, data: {
+    number: string; block?: string | null; floor?: number | null
+    type?: string; sqMeters?: number | null; parkingSpots?: number
+    notes?: string | null; ownerName?: string | null; ownerPhone?: string | null; ownerEmail?: string | null
+  }) {
+    const res = await api.post(`/communities/${communityId}/units`, data)
+    return res.data
+  },
+
+  async createResident(communityId: string, data: {
+    firstName: string; lastName: string; email: string; phone?: string | null
+    password?: string; role?: string; unitId?: string | null
+    occupancyType?: 'OWNER' | 'TENANT'; isPrimary?: boolean; moveInDate?: string | null
+    emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelation?: string | null
+  }) {
+    const res = await api.post(`/communities/${communityId}/residents`, data)
+    return res.data
+  },
+
+  async deleteResident(communityId: string, userId: string) {
+    const res = await api.delete(`/communities/${communityId}/residents/${userId}`)
+    return res.data
+  },
+
+  async uploadTransferProof(communityId: string, paymentId: string, imageUri: string, mimeType: string) {
+    const formData = new FormData()
+    formData.append('file', { uri: imageUri, type: mimeType, name: `proof-${paymentId}.jpg` } as any)
+    const res = await api.post(`/communities/${communityId}/payments/${paymentId}/upload-proof`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data as { ok: boolean; url: string }
+  },
+
   async list(communityId: string, params?: { search?: string; block?: string; page?: number; limit?: number }) {
     const res = await api.get(`/communities/${communityId}/residents`, { params })
     return res.data as { residents: Resident[]; total: number; page: number; pages: number }

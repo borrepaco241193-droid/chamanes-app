@@ -19,6 +19,7 @@ datasource db {
 enum UserRole {
   SUPER_ADMIN      // Platform owner — access to all communities
   COMMUNITY_ADMIN  // Manages one community
+  MANAGER          // Assistant manager — same access as COMMUNITY_ADMIN within community
   RESIDENT         // Lives in a unit
   GUARD            // Controls gate access
   STAFF            // Maintenance / services worker
@@ -427,6 +428,7 @@ model Payment {
   paymentMethod         String        @default("STRIPE") // STRIPE | CASH | TRANSFER | CHECK
   cashReceivedById      String?       // Admin user who collected cash
   cashNotes             String?       // Receipt number, notes
+  transferProofUrl      String?       // Screenshot of transfer proof (uploaded by admin)
   metadata              Json          @default("{}")
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt

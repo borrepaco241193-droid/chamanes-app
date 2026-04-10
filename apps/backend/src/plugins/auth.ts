@@ -57,7 +57,9 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
           return reply.code(401).send({ error: 'Unauthorized', message: 'Not authenticated' })
         }
         const effectiveRole = user.communityRole ?? user.role
-        if (!roles.includes(effectiveRole) && user.role !== UserRole.SUPER_ADMIN) {
+        // MANAGER has the same access level as COMMUNITY_ADMIN
+        const resolvedRole = effectiveRole === UserRole.MANAGER ? UserRole.COMMUNITY_ADMIN : effectiveRole
+        if (!roles.includes(effectiveRole) && !roles.includes(resolvedRole) && user.role !== UserRole.SUPER_ADMIN) {
           reply.code(403).send({ error: 'Forbidden', message: 'You do not have permission to perform this action' })
         }
       },

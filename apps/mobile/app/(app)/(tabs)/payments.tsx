@@ -12,8 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import { usePayments, useCheckout } from '../../../src/hooks/usePayments'
-import { useMarkPaid } from '../../../src/hooks/useResidents'
+import { useMarkPaid, useUploadTransferProof } from '../../../src/hooks/useResidents'
 import { useAuthStore } from '../../../src/stores/auth.store'
+import * as ImagePicker from 'expo-image-picker'
 import { format, isPast, differenceInDays } from 'date-fns'
 import type { Payment, PaymentStatus } from '../../../src/services/payment.service'
 
@@ -123,10 +124,16 @@ export default function PaymentsScreen() {
   const [filter, setFilter] = useState<PaymentStatus | undefined>(undefined)
   const { data, isLoading, refetch, isRefetching } = usePayments(filter)
   const { mutateAsync: getCheckout } = useCheckout()
-  const { mutateAsync: markPaid, isPending: isMarkingPaid } = useMarkPaid()
+  const { mutateAsync: markPaid } = useMarkPaid()
+  const { mutateAsync: uploadProof } = useUploadTransferProof()
   const [payingId, setPayingId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
-  const isAdmin = user?.communityRole === 'COMMUNITY_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.communityRole === 'SUPER_ADMIN'
+  const isAdmin = (
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER'
+  )
 
   async function handleMarkPaid(paymentId: string) {
     Alert.alert(
@@ -134,26 +141,68 @@ export default function PaymentsScreen() {
       '¿Cómo recibiste el pago?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Efectivo',
-          onPress: () => doMarkPaid(paymentId, 'CASH'),
-        },
-        {
-          text: 'Transferencia',
-          onPress: () => doMarkPaid(paymentId, 'TRANSFER'),
-        },
+        { text: 'Efectivo', onPress: () => doMarkPaid(paymentId, 'CASH') },
+        { text: 'Transferencia', onPress: () => doMarkPaidTransfer(paymentId) },
       ],
     )
   }
 
-  async function doMarkPaid(paymentId: string, method: 'CASH' | 'TRANSFER') {
+  async function doMarkPaid(paymentId: string, method: 'CASH' | 'TRANSFER', transferProofUrl?: string) {
     try {
-      await markPaid({ paymentId, data: { paymentMethod: method } })
+      await markPaid({ paymentId, data: { paymentMethod: method, transferProofUrl: transferProofUrl ?? null } })
       refetch()
       Alert.alert('Listo', 'Pago registrado correctamente')
     } catch {
       Alert.alert('Error', 'No se pudo registrar el pago')
     }
+  }
+
+  async function doMarkPaidTransfer(paymentId: string) {
+    // Ask if they want to attach a screenshot
+    Alert.alert(
+      'Comprobante de transferencia',
+      '¿Deseas adjuntar una captura de pantalla del comprobante?',
+      [
+        {
+          text: 'Sin comprobante',
+          onPress: () => doMarkPaid(paymentId, 'TRANSFER'),
+        },
+        {
+          text: 'Adjuntar captura',
+          onPress: async () => {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+            if (!permission.granted) {
+              Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para adjuntar el comprobante.')
+              return
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.7,
+              allowsEditing: false,
+            })
+            if (result.canceled || !result.assets[0]) {
+              // Cancelled — mark as paid without proof
+              doMarkPaid(paymentId, 'TRANSFER')
+              return
+            }
+            const asset = result.assets[0]
+            try {
+              // Upload proof first, then mark paid
+              const { url } = await uploadProof({
+                paymentId,
+                imageUri: asset.uri,
+                mimeType: asset.mimeType ?? 'image/jpeg',
+              })
+              await doMarkPaid(paymentId, 'TRANSFER', url)
+            } catch {
+              // Upload failed — mark paid without proof
+              Alert.alert('Aviso', 'No se pudo subir el comprobante, pero el pago fue registrado.')
+              doMarkPaid(paymentId, 'TRANSFER')
+            }
+          },
+        },
+      ],
+    )
   }
 
   async function handlePay(paymentId: string) {

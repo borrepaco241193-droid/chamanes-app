@@ -6,6 +6,54 @@ function useCommunityId() {
   return useAuthStore((s) => s.user?.communityId ?? '')
 }
 
+export function useCreateUnit() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof residentService.createUnit>[1]) =>
+      residentService.createUnit(communityId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}
+
+export function useCreateResident() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof residentService.createResident>[1]) =>
+      residentService.createResident(communityId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}
+
+export function useDeleteResident() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => residentService.deleteResident(communityId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}
+
+export function useUploadTransferProof() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ paymentId, imageUri, mimeType }: { paymentId: string; imageUri: string; mimeType: string }) =>
+      residentService.uploadTransferProof(communityId, paymentId, imageUri, mimeType),
+    onSuccess: (_, { paymentId }) => {
+      queryClient.invalidateQueries({ queryKey: ['payments', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
 export function useResidents(params?: { search?: string; block?: string }) {
   const communityId = useCommunityId()
   return useQuery({

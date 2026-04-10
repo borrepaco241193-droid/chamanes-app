@@ -369,7 +369,8 @@ function useIsAdmin() {
   return (
     user?.role === 'SUPER_ADMIN' ||
     user?.communityRole === 'SUPER_ADMIN' ||
-    user?.communityRole === 'COMMUNITY_ADMIN'
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER'
   )
 }
 

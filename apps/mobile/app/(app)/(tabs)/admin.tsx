@@ -161,10 +161,10 @@ function AccessBarChart({ data }: { data: { date: string; entries: number; exits
 export default function AdminScreen() {
   const user = useAuthStore((s) => s.user)
   const isAdmin =
-    user?.role === 'COMMUNITY_ADMIN' ||
     user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN' ||
     user?.communityRole === 'COMMUNITY_ADMIN' ||
-    user?.communityRole === 'SUPER_ADMIN'
+    user?.communityRole === 'MANAGER'
 
   const { data: stats, isLoading, refetch: refetchStats, isRefetching } = useDashboardStats()
   const { data: paymentReport, refetch: refetchPayments } = usePaymentReport(6)
