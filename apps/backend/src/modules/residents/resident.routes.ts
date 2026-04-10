@@ -136,6 +136,12 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       const { communityId } = req.params
       const body = createUnitSchema.parse(req.body)
 
+      // Verify community exists (prevents FK crash with a clear error)
+      const community = await fastify.prisma.community.findUnique({ where: { id: communityId } })
+      if (!community) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Comunidad no encontrada. Verifica tu sesión.' })
+      }
+
       // Check unit number uniqueness within community
       const existing = await fastify.prisma.unit.findUnique({
         where: { communityId_number: { communityId, number: body.number } },

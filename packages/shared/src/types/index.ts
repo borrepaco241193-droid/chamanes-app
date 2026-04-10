@@ -2,7 +2,7 @@
 // Chamanes — Shared Types (used by both mobile and backend)
 // ============================================================
 
-export type UserRole = 'SUPER_ADMIN' | 'COMMUNITY_ADMIN' | 'RESIDENT' | 'GUARD' | 'STAFF'
+export type UserRole = 'SUPER_ADMIN' | 'COMMUNITY_ADMIN' | 'MANAGER' | 'RESIDENT' | 'GUARD' | 'STAFF'
 
 export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED'
 export type PaymentType = 'MAINTENANCE_FEE' | 'RESERVATION_FEE' | 'FINE' | 'OTHER'

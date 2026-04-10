@@ -54,8 +54,11 @@ function NewUnitModal({ visible, onClose }: { visible: boolean; onClose: () => v
   const [form, setForm] = useState({ number: '', block: '', floor: '', type: 'house', sqMeters: '', parkingSpots: '0', notes: '', ownerName: '', ownerPhone: '', ownerEmail: '' })
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
 
+  const communityId = useAuthStore((s) => s.user?.communityId)
+
   async function handleSubmit() {
     if (!form.number.trim()) return Alert.alert('Error', 'El número de domicilio es requerido')
+    if (!communityId) return Alert.alert('Error de sesión', 'No se detectó la comunidad activa. Cierra sesión y vuelve a entrar.')
     try {
       await createUnit({
         number:       form.number.trim(),
@@ -127,6 +130,7 @@ function NewUnitModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
 function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClose: () => void; units: { id: string; number: string; block?: string | null }[] }) {
   const { mutateAsync: createResident, isPending } = useCreateResident()
+  const communityId = useAuthStore((s) => s.user?.communityId)
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', password: '',
     role: 'RESIDENT', unitId: '', occupancyType: 'OWNER' as OccupancyType,
@@ -138,6 +142,7 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
       return Alert.alert('Error', 'Nombre, apellido y correo son requeridos')
     }
+    if (!communityId) return Alert.alert('Error de sesión', 'No se detectó la comunidad activa. Cierra sesión y vuelve a entrar.')
     try {
       await createResident({
         firstName:    form.firstName.trim(),
