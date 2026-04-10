@@ -74,13 +74,27 @@ export class AuthService {
     await this.redis.del(lockKey)
 
     // Determine active community context
-    const activeCommunity = user.communityUsers[0]
+    let activeCommunity = user.communityUsers[0]
+
+    // SUPER_ADMIN may have no CommunityUser rows — auto-pick the first community
+    // so communityId is always set in the token and the mobile gets gate buttons
+    let superAdminCommunityId: string | undefined
+    if (!activeCommunity && user.globalRole === 'SUPER_ADMIN') {
+      const firstCommunity = await this.prisma.community.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, logoUrl: true },
+      })
+      if (firstCommunity) {
+        superAdminCommunityId = firstCommunity.id
+      }
+    }
 
     const accessToken = signAccessToken({
       sub: user.id,
       email: user.email,
       role: user.globalRole,
-      communityId: activeCommunity?.communityId,
+      communityId: activeCommunity?.communityId ?? superAdminCommunityId,
       communityRole: activeCommunity?.role,
     })
 
@@ -125,7 +139,7 @@ export class AuthService {
         lastName: user.lastName,
         avatarUrl: user.avatarUrl,
         role: user.globalRole,
-        communityId: activeCommunity?.communityId,
+        communityId: activeCommunity?.communityId ?? superAdminCommunityId,
         communityRole: activeCommunity?.role,
         communities: user.communityUsers.map((cu) => ({
           id: cu.communityId,
