@@ -63,8 +63,8 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { communityId: string }
     Querystring: { status?: string; page?: string; limit?: string }
   }>('/:communityId/visitors', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const isAdmin = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN].includes(
-      (req.user.communityRole ?? req.user.role) as UserRole,
+    const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
+      req.user.communityRole ?? req.user.role,
     )
 
     const result = await listVisitorPasses(

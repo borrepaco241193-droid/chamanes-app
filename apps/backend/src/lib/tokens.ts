@@ -11,7 +11,7 @@ import type { JWTPayload } from '../plugins/auth.js'
 
 export function signAccessToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
   return jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
+    expiresIn: env.JWT_EXPIRES_IN as any,
     issuer: 'chamanes-api',
     audience: 'chamanes-app',
   })

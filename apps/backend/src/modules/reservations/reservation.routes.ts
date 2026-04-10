@@ -86,8 +86,8 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/reservations',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const isAdmin = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN].includes(
-        (req.user.communityRole ?? req.user.role) as UserRole,
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
+        req.user.communityRole ?? req.user.role,
       )
       const upcoming = req.query.upcoming !== 'false'
       const reservations = await listReservations(
@@ -107,8 +107,8 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
       const body = cancelReservationSchema.parse(req.body ?? {})
-      const isAdmin = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN].includes(
-        (req.user.communityRole ?? req.user.role) as UserRole,
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
+        req.user.communityRole ?? req.user.role,
       )
       const reservation = await cancelReservation(
         fastify.prisma,

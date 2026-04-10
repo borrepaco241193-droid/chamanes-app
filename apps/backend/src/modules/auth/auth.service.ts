@@ -218,7 +218,7 @@ export class AuthService {
           where: { isActive: true },
           include: {
             community: { select: { id: true, name: true, logoUrl: true, currency: true } },
-            units: {
+            unitResidents: {
               include: { unit: { select: { id: true, number: true, floor: true, block: true } } },
             },
           },
