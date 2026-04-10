@@ -20,7 +20,7 @@ import { z } from 'zod'
 // PATCH  /:communityId/payments/:paymentId/mark-paid     — cash payment (admin)
 // ============================================================
 
-const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN]
+const ADMIN_ROLES: UserRole[] = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN]
 
 function isAdmin(role?: string | null) {
   return ADMIN_ROLES.includes(role as UserRole)
@@ -301,7 +301,7 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.emergencyContactPhone    !== undefined) cuUpdates.emergencyContactPhone    = body.emergencyContactPhone
       if (body.emergencyContactRelation !== undefined) cuUpdates.emergencyContactRelation = body.emergencyContactRelation
 
-      const communityUser = await fastify.prisma.communityUser.update({
+      await fastify.prisma.communityUser.update({
         where: { userId_communityId: { userId, communityId } },
         data: cuUpdates,
       })
