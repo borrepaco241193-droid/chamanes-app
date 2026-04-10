@@ -513,9 +513,10 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { communityId, userId } = req.params
       const requesterId = req.user.sub
-      const requesterRole = req.user.communityRole ?? req.user.role
+      // Check both communityRole and globalRole so SUPER_ADMIN always passes
+      const isRequesterAdmin = isAdminRole(req.user.communityRole) || isAdminRole(req.user.role)
 
-      if (!isAdminRole(requesterRole) && requesterId !== userId) {
+      if (!isRequesterAdmin && requesterId !== userId) {
         return reply.code(403).send({ error: 'Forbidden' })
       }
 
