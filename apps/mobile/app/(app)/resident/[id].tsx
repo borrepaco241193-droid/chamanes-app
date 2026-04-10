@@ -253,6 +253,7 @@ function EditResidentModal({
   const [form, setForm] = useState({
     firstName: resident?.user?.firstName ?? '',
     lastName: resident?.user?.lastName ?? '',
+    email: resident?.user?.email ?? '',
     phone: resident?.user?.phone ?? '',
     emergencyContactName: resident?.emergencyContactName ?? '',
     emergencyContactPhone: resident?.emergencyContactPhone ?? '',
@@ -270,10 +271,14 @@ function EditResidentModal({
   const set = (k: string) => (v: any) => setForm((f) => ({ ...f, [k]: v }))
 
   async function handleSave() {
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      return Alert.alert('Error', 'El correo electrónico no es válido')
+    }
     try {
       await update({
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
+        email: form.email.trim().toLowerCase() || undefined,
         phone: form.phone || null,
         emergencyContactName: form.emergencyContactName || null,
         emergencyContactPhone: form.emergencyContactPhone || null,
@@ -289,8 +294,8 @@ function EditResidentModal({
       })
       onClose()
       Alert.alert('Guardado', 'Datos del residente actualizados')
-    } catch {
-      Alert.alert('Error', 'No se pudieron guardar los cambios')
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudieron guardar los cambios')
     }
   }
 
@@ -308,6 +313,7 @@ function EditResidentModal({
             <View style={{ flex: 1 }}><Field label="Nombre" value={form.firstName} onChangeText={set('firstName')} /></View>
             <View style={{ flex: 1 }}><Field label="Apellido" value={form.lastName} onChangeText={set('lastName')} /></View>
           </View>
+          <Field label="Correo electrónico" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" placeholder="correo@ejemplo.com" />
           <Field label="Teléfono personal" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" autoCapitalize="none" />
 
           <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12, marginTop: 8 }}>CONTACTO DE EMERGENCIA (RESIDENTE)</Text>

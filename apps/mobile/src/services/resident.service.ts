@@ -152,6 +152,7 @@ export const residentService = {
   async update(communityId: string, userId: string, data: Partial<{
     firstName: string
     lastName: string
+    email: string
     phone: string | null
     emergencyContactName: string | null
     emergencyContactPhone: string | null

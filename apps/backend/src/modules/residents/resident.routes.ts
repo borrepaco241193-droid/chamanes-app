@@ -78,6 +78,7 @@ const createResidentSchema = z.object({
 const updateResidentSchema = z.object({
   firstName:                z.string().min(1).optional(),
   lastName:                 z.string().min(1).optional(),
+  email:                    z.string().email().optional(),
   phone:                    z.string().optional().nullable(),
   emergencyContactName:     z.string().optional().nullable(),
   emergencyContactPhone:    z.string().optional().nullable(),
@@ -480,6 +481,14 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.firstName !== undefined) userUpdates.firstName = body.firstName
       if (body.lastName  !== undefined) userUpdates.lastName  = body.lastName
       if (body.phone     !== undefined) userUpdates.phone     = body.phone
+      if (body.email !== undefined) {
+        // Check email uniqueness before updating
+        const existing = await fastify.prisma.user.findUnique({ where: { email: body.email } })
+        if (existing && existing.id !== userId) {
+          return reply.code(409).send({ error: 'Conflict', message: 'Este correo ya está en uso por otra cuenta' })
+        }
+        userUpdates.email = body.email
+      }
       if (Object.keys(userUpdates).length > 0) {
         await fastify.prisma.user.update({ where: { id: userId }, data: userUpdates })
       }
