@@ -66,7 +66,7 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     {
       preHandler: [
         fastify.authenticate,
-        fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN),
+        fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER),
       ],
     },
     async (req, reply) => {

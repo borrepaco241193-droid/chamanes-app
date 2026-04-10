@@ -5,7 +5,7 @@ import { getDashboardStats, getPaymentReport, getAccessReport } from './admin.se
 const adminRoutes: FastifyPluginAsync = async (fastify) => {
   const adminOnly = [
     fastify.authenticate,
-    fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN),
+    fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER),
   ]
 
   // GET /communities/:id/admin/stats — dashboard overview
