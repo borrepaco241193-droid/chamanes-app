@@ -44,5 +44,5 @@ USER fastify
 
 EXPOSE 3000
 
-# Run migrations then start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# Run migrations with retry, then start server
+CMD ["sh", "-c", "until npx prisma migrate deploy; do echo 'DB not ready, retrying in 5s...'; sleep 5; done && node dist/index.js"]
