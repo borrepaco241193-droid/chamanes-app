@@ -20,11 +20,12 @@ import { useRef, useState } from 'react'
 import * as Haptics from 'expo-haptics'
 
 const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: 'Super Admin',
+  SUPER_ADMIN:     'Super Admin',
   COMMUNITY_ADMIN: 'Administrador',
-  RESIDENT: 'Residente',
-  GUARD: 'Guardia',
-  STAFF: 'Personal',
+  MANAGER:         'Manager',
+  RESIDENT:        'Residente',
+  GUARD:           'Guardia',
+  STAFF:           'Personal',
 }
 
 // ── Gate Button ───────────────────────────────────────────────
@@ -170,6 +171,37 @@ function QuickAction({ icon, label, onPress, locked }: { icon: string; label: st
   )
 }
 
+// ── Admin Action (larger card for management) ─────────────────
+function AdminAction({ icon, color, label, sub, onPress }: {
+  icon: string; color: string; label: string; sub: string; onPress: () => void
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={{
+        flex: 1, minWidth: '44%',
+        backgroundColor: '#1E293B',
+        borderRadius: 18, padding: 16,
+        borderWidth: 1, borderColor: '#334155',
+        gap: 10,
+      }}
+    >
+      <View style={{
+        width: 42, height: 42, borderRadius: 12,
+        backgroundColor: `${color}20`,
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Ionicons name={icon as any} size={22} color={color} />
+      </View>
+      <View>
+        <Text style={{ color: 'white', fontSize: 14, fontWeight: '700' }}>{label}</Text>
+        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{sub}</Text>
+      </View>
+    </TouchableOpacity>
+  )
+}
+
 // ── Main Screen ───────────────────────────────────────────────
 export default function DashboardScreen() {
   const { user } = useAuthStore()
@@ -285,7 +317,51 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Quick Actions */}
+        {/* ── Admin / Manager management section ── */}
+        {isAdmin && (
+          <>
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', marginBottom: 14 }}>Gestión</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
+              <AdminAction
+                icon="home-outline"
+                color="#3B82F6"
+                label="Agregar casa"
+                sub="Nueva unidad"
+                onPress={() => router.push('/(app)/residents' as any)}
+              />
+              <AdminAction
+                icon="person-add-outline"
+                color="#10B981"
+                label="Agregar residente"
+                sub="Nuevo habitante"
+                onPress={() => router.push('/(app)/residents' as any)}
+              />
+              <AdminAction
+                icon="grid-outline"
+                color="#F59E0B"
+                label="Unidades"
+                sub="Dashboard y stats"
+                onPress={() => router.push('/(app)/units' as any)}
+              />
+              <AdminAction
+                icon="people-outline"
+                color="#8B5CF6"
+                label="Residentes"
+                sub="Ver y editar"
+                onPress={() => router.push('/(app)/residents' as any)}
+              />
+              <AdminAction
+                icon="settings-outline"
+                color="#94A3B8"
+                label="Panel Admin"
+                sub="Reportes y stats"
+                onPress={() => router.push('/(app)/(tabs)/admin' as any)}
+              />
+            </View>
+          </>
+        )}
+
+        {/* ── Regular quick actions ── */}
         <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', marginBottom: 14 }}>Acciones rápidas</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
           {role !== 'GUARD' && (
@@ -298,7 +374,7 @@ export default function DashboardScreen() {
                 : router.push('/(app)/(tabs)/visitors')}
             />
           )}
-          {role !== 'GUARD' && (
+          {!isAdmin && role !== 'GUARD' && (
             <QuickAction icon="💳" label="Pagar cuota" onPress={() => router.push('/(app)/(tabs)/payments')} />
           )}
           {role !== 'GUARD' && (
@@ -312,12 +388,6 @@ export default function DashboardScreen() {
             />
           )}
           <QuickAction icon="🔧" label="Reportar" onPress={() => router.push('/(app)/workorder/new' as any)} />
-          {isAdmin && (
-            <QuickAction icon="⚙️" label="Panel Admin" onPress={() => router.push('/(app)/(tabs)/admin' as any)} />
-          )}
-          {isAdmin && (
-            <QuickAction icon="🏘️" label="Unidades" onPress={() => router.push('/(app)/units' as any)} />
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>
