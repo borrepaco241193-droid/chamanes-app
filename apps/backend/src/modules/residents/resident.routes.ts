@@ -312,19 +312,22 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       const { communityId } = req.params
       const body = createResidentSchema.parse(req.body)
 
-      // Check email uniqueness
+      // Look up user by email
       const existingUser = await fastify.prisma.user.findUnique({ where: { email: body.email } })
 
       let userId: string
 
       if (existingUser) {
-        // User already exists — just add to community if not already there
-        const existingMembership = await fastify.prisma.communityUser.findUnique({
-          where: { userId_communityId: { userId: existingUser.id, communityId } },
+        // Update name/phone in case admin is re-registering with corrections
+        await fastify.prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            firstName: body.firstName,
+            lastName:  body.lastName,
+            phone:     body.phone ?? existingUser.phone,
+            isActive:  true,
+          },
         })
-        if (existingMembership) {
-          return reply.code(409).send({ error: 'Conflict', message: 'Este correo ya está registrado en la comunidad' })
-        }
         userId = existingUser.id
       } else {
         // Create new user
@@ -339,27 +342,60 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
             phone:        body.phone ?? null,
             passwordHash,
             globalRole:   UserRole.RESIDENT,
-            isVerified:   true, // Admin-created accounts are pre-verified
+            isVerified:   true,
           },
         })
         userId = newUser.id
       }
 
-      // Create CommunityUser
-      const communityUser = await fastify.prisma.communityUser.create({
-        data: {
-          userId,
-          communityId,
-          role: body.role as UserRole,
-          isActive: true,
-          emergencyContactName:     body.emergencyContactName ?? null,
-          emergencyContactPhone:    body.emergencyContactPhone ?? null,
-          emergencyContactRelation: body.emergencyContactRelation ?? null,
-        },
+      // Upsert CommunityUser — reactivates a previously deleted membership
+      const existingMembership = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId, communityId } },
       })
+
+      if (existingMembership?.isActive) {
+        // Truly already an active member — block duplicate
+        return reply.code(409).send({ error: 'Conflict', message: 'Este residente ya tiene una membresía activa en la comunidad' })
+      }
+
+      let communityUser: { id: string }
+
+      if (existingMembership) {
+        // Reactivate the old (deactivated) membership
+        communityUser = await fastify.prisma.communityUser.update({
+          where: { id: existingMembership.id },
+          data: {
+            isActive:                 true,
+            role:                     body.role as UserRole,
+            emergencyContactName:     body.emergencyContactName ?? null,
+            emergencyContactPhone:    body.emergencyContactPhone ?? null,
+            emergencyContactRelation: body.emergencyContactRelation ?? null,
+          },
+        })
+      } else {
+        // Brand new membership
+        communityUser = await fastify.prisma.communityUser.create({
+          data: {
+            userId,
+            communityId,
+            role:                     body.role as UserRole,
+            isActive:                 true,
+            emergencyContactName:     body.emergencyContactName ?? null,
+            emergencyContactPhone:    body.emergencyContactPhone ?? null,
+            emergencyContactRelation: body.emergencyContactRelation ?? null,
+          },
+        })
+      }
 
       // Assign to unit if provided
       if (body.unitId) {
+        // Close any lingering open residency for this communityUser in other units
+        await fastify.prisma.unitResident.updateMany({
+          where: { communityUserId: communityUser.id, moveOutDate: null },
+          data:  { moveOutDate: new Date() },
+        })
+
+        // Create fresh UnitResident row (allows reusing a unit after prior resident was deleted)
         await fastify.prisma.unitResident.create({
           data: {
             unitId:          body.unitId,
@@ -370,10 +406,9 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
 
-        // Mark unit as occupied
         await fastify.prisma.unit.update({
           where: { id: body.unitId },
-          data: { isOccupied: true },
+          data:  { isOccupied: true },
         })
       }
 
