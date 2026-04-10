@@ -80,6 +80,31 @@ enum WorkOrderPriority {
   URGENT
 }
 
+enum OccupancyType {
+  OWNER    // Lives in their own property
+  TENANT   // Renting from an owner
+}
+
+enum VehicleType {
+  CAR
+  MOTORCYCLE
+  TRUCK
+  VAN
+  OTHER
+}
+
+enum MemberRelationship {
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  RELATIVE
+  CARETAKER
+  EMPLOYEE   // Housekeeper, nanny, etc.
+  PARTNER
+  OTHER
+}
+
 // ── Community (Tenant) ───────────────────────────────────────
 
 model Community {
@@ -155,6 +180,11 @@ model CommunityUser {
   role        UserRole
   isActive    Boolean  @default(true)
   joinedAt    DateTime @default(now())
+  // Extra contact info scoped to this community
+  phone                   String?  // Community-specific phone (may differ from user.phone)
+  emergencyContactName    String?
+  emergencyContactPhone   String?
+  emergencyContactRelation String?
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   community     Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -179,29 +209,89 @@ model Unit {
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  // Owner info (useful when owner doesn't use the app, e.g. absentee landlord)
+  ownerName   String?
+  ownerPhone  String?
+  ownerEmail  String?
+  // Unit-level emergency contact (person to call if no one answers inside)
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?  // e.g. "Hermana", "Vecino de confianza"
 
-  community Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  residents UnitResident[]
-  payments  Payment[]
+  community        Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  residents        UnitResident[]
+  payments         Payment[]
+  householdMembers HouseholdMember[]
+  vehicles         Vehicle[]
 
   @@unique([communityId, number])
   @@map("units")
 }
 
 model UnitResident {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
   unitId          String
   communityUserId String
-  isPrimary       Boolean   @default(false) // Primary resident (owner/leaseholder)
+  isPrimary       Boolean       @default(false) // Primary resident (owner/leaseholder)
+  occupancyType   OccupancyType @default(OWNER)  // OWNER or TENANT
   moveInDate      DateTime?
   moveOutDate     DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime      @default(now())
 
   unit          Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
   communityUser CommunityUser @relation(fields: [communityUserId], references: [id], onDelete: Cascade)
 
   @@unique([unitId, communityUserId])
   @@map("unit_residents")
+}
+
+// ── Household Members (authorized people per unit) ────────────
+
+model HouseholdMember {
+  id              String             @id @default(cuid())
+  communityId     String
+  unitId          String
+  name            String
+  relationship    MemberRelationship @default(OTHER)
+  phone           String?
+  email           String?
+  idDocument      String?            // National ID / passport number for manual verification
+  canGrantAccess  Boolean            @default(false) // Can authorize entry at gate
+  photoUrl        String?
+  notes           String?
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, unitId])
+  @@map("household_members")
+}
+
+// ── Vehicles ──────────────────────────────────────────────────
+
+model Vehicle {
+  id          String      @id @default(cuid())
+  communityId String
+  unitId      String
+  type        VehicleType @default(CAR)
+  make        String      // Toyota, Honda, Nissan…
+  model       String      // Corolla, Civic, Versa…
+  year        Int?
+  color       String
+  plateNumber String
+  sticker     String?     // Complex-assigned sticker/permit number
+  isActive    Boolean     @default(true)
+  notes       String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, plateNumber])
+  @@index([communityId, unitId])
+  @@map("vehicles")
 }
 
 // ── Visitor Passes (QR Codes) ─────────────────────────────────
@@ -333,6 +423,10 @@ model Payment {
   periodYear            Int?
   lateFeeApplied        Boolean       @default(false)
   lateFeeAmount         Decimal       @default(0) @db.Decimal(10, 2)
+  // Cash / manual payment tracking
+  paymentMethod         String        @default("STRIPE") // STRIPE | CASH | TRANSFER | CHECK
+  cashReceivedById      String?       // Admin user who collected cash
+  cashNotes             String?       // Receipt number, notes
   metadata              Json          @default("{}")
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
