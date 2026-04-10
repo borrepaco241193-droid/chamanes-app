@@ -384,7 +384,7 @@ export default function ResidentDetailScreen() {
   const isAdmin = useIsAdmin()
   const { id, cid } = useLocalSearchParams<{ id: string; cid?: string }>()
   // cid is passed from the residents list to ensure communityId is always available
-  const { data: resident, isLoading, refetch } = useResident(id ?? '', cid as string | undefined)
+  const { data: resident, isLoading, isError, error, refetch } = useResident(id ?? '', cid as string | undefined)
 
   // All hooks must be called before any early returns (React rules of hooks)
   const { mutateAsync: deleteMember } = useDeleteMember(resident?.units?.[0]?.id ?? '')
@@ -428,9 +428,19 @@ export default function ResidentDetailScreen() {
   }
 
   if (!resident) {
+    const errMsg = isError
+      ? ((error as any)?.response?.data?.message ?? (error as any)?.message ?? 'Error del servidor')
+      : (!id || !cid) ? `Sin communityId (id=${id}, cid=${cid})` : 'No encontrado'
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#64748B' }}>Residente no encontrado</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Ionicons name="alert-circle-outline" size={40} color="#EF4444" />
+        <Text style={{ color: '#EF4444', fontWeight: '700', marginTop: 12, fontSize: 15 }}>
+          {isError ? 'Error al cargar residente' : 'Residente no encontrado'}
+        </Text>
+        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8, fontSize: 12 }}>{errMsg}</Text>
+        <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 20, backgroundColor: '#1E293B', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
+          <Text style={{ color: '#3B82F6', fontWeight: '600' }}>Reintentar</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     )
   }

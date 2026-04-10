@@ -86,6 +86,7 @@ export function useResident(userId: string, communityIdOverride?: string) {
     queryFn: () => residentService.get(communityId, userId),
     enabled: !!communityId && !!userId,
     staleTime: 30_000,
+    retry: 1,
   })
 }
 
