@@ -56,4 +56,8 @@ export const authService = {
   verifyEmail: async (token: string): Promise<void> => {
     await api.post('/auth/verify-email', { token })
   },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    await api.post('/auth/change-password', { currentPassword, newPassword })
+  },
 }

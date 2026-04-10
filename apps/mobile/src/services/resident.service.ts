@@ -101,9 +101,31 @@ export interface ResidentPayment {
 // ── Service ───────────────────────────────────────────────────
 
 export const residentService = {
-  async listUnits(communityId: string) {
-    const res = await api.get(`/communities/${communityId}/units`)
-    return res.data as { units: { id: string; number: string; block?: string | null; floor?: number | null; isOccupied: boolean }[] }
+  async listUnits(communityId: string, withStats = false) {
+    const res = await api.get(`/communities/${communityId}/units`, {
+      params: withStats ? { stats: 'true' } : undefined,
+    })
+    return res.data as {
+      units: {
+        id: string; number: string; block?: string | null; floor?: number | null
+        type: string; isOccupied: boolean; parkingSpots: number
+        ownerName?: string | null; ownerPhone?: string | null; ownerEmail?: string | null
+        notes?: string | null; sqMeters?: number | null
+        _count?: { residents: number }
+        vehicles?: { id: string; plateNumber: string; make: string; model: string }[]
+        householdMembers?: { id: string }[]
+        residents?: any[]
+      }[]
+      stats?: { total: number; occupied: number; vacant: number }
+    }
+  },
+
+  async getUnitsReportUrl(communityId: string) {
+    // Returns the full URL for CSV download — used with Linking.openURL
+    const res = await api.get(`/communities/${communityId}/units/report`, {
+      responseType: 'text',
+    })
+    return res.data as string
   },
 
   async createUnit(communityId: string, data: {

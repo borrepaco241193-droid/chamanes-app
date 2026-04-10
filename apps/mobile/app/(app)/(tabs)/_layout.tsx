@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router'
-import { View } from 'react-native'
+import { View, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuthStore } from '../../../src/stores/auth.store'
 
@@ -7,7 +7,11 @@ type IconName = React.ComponentProps<typeof Ionicons>['name']
 
 function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
   return (
-    <View className={`items-center justify-center w-10 h-10 rounded-2xl ${focused ? 'bg-primary-500/20' : ''}`}>
+    <View style={{
+      alignItems: 'center', justifyContent: 'center',
+      width: 40, height: 40, borderRadius: 16,
+      backgroundColor: focused ? 'rgba(59,130,246,0.15)' : 'transparent',
+    }}>
       <Ionicons name={name} size={22} color={focused ? '#3B82F6' : '#64748B'} />
     </View>
   )
@@ -15,8 +19,15 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 
 export default function TabsLayout() {
   const { user } = useAuthStore()
-  const isAdmin = user?.communityRole === 'COMMUNITY_ADMIN' || user?.role === 'SUPER_ADMIN'
+  const isAdmin =
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER' ||
+    user?.role === 'SUPER_ADMIN'
   const isGuard = user?.communityRole === 'GUARD'
+  const isStaff = user?.communityRole === 'STAFF'
+
+  // Extra bottom padding on Android to clear the gesture navigation bar
+  const tabBarPaddingBottom = Platform.OS === 'android' ? 18 : 10
 
   return (
     <Tabs
@@ -25,81 +36,71 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: '#1E293B',
           borderTopColor: '#334155',
-          height: 70,
-          paddingBottom: 10,
+          height: Platform.OS === 'android' ? 72 + tabBarPaddingBottom : 70,
+          paddingBottom: tabBarPaddingBottom,
           paddingTop: 6,
         },
         tabBarShowLabel: true,
-        tabBarLabelStyle: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+        tabBarLabelStyle: { fontSize: 11 },
         tabBarActiveTintColor: '#3B82F6',
         tabBarInactiveTintColor: '#64748B',
       }}
     >
-      {/* Dashboard — all roles */}
+      {/* Home — all roles */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Inicio',
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} />,
         }}
       />
 
-      {/* Visitor passes — residents & guards */}
+      {/* Visitors — residents, admins, guards */}
       <Tabs.Screen
         name="visitors"
         options={{
-          title: 'Visitors',
+          title: 'Visitas',
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'people' : 'people-outline'} focused={focused} />,
         }}
       />
 
-      {/* Payments — residents only */}
+      {/* Payments — not guards */}
       <Tabs.Screen
         name="payments"
         options={{
-          title: 'Payments',
-          href: isGuard ? null : undefined, // Hide from guards
+          title: 'Pagos',
+          href: isGuard ? null : undefined,
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'card' : 'card-outline'} focused={focused} />,
         }}
       />
 
-      {/* Reservations — residents */}
+      {/* Reservations — not guards */}
       <Tabs.Screen
         name="reservations"
         options={{
-          title: 'Reserve',
+          title: 'Reservar',
           href: isGuard ? null : undefined,
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'calendar' : 'calendar-outline'} focused={focused} />,
         }}
       />
 
-      {/* Staff — staff, guards, admins (not residents) */}
+      {/* Staff — guards, admins, staff only */}
       <Tabs.Screen
         name="staff"
         options={{
           title: 'Turno',
-          href: (!isGuard && !isAdmin && user?.communityRole !== 'STAFF') ? null : undefined,
-          tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'people' : 'people-outline'} focused={focused} />,
+          href: (!isGuard && !isAdmin && !isStaff) ? null : undefined,
+          tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'people-circle' : 'people-circle-outline'} focused={focused} />,
         }}
       />
 
-      {/* Work Orders — residents, staff, admins (not guards) */}
+      {/* Work Orders — not guards */}
       <Tabs.Screen
         name="workorders"
         options={{
           title: 'Tareas',
           href: isGuard ? null : undefined,
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'construct' : 'construct-outline'} focused={focused} />,
-        }}
-      />
-
-      {/* Admin — admin only */}
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          href: isAdmin ? undefined : null,
-          tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'settings' : 'settings-outline'} focused={focused} />,
         }}
       />
 
@@ -110,6 +111,15 @@ export default function TabsLayout() {
           title: 'Gate',
           href: isGuard ? undefined : null,
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'scan' : 'scan-outline'} focused={focused} />,
+        }}
+      />
+
+      {/* Admin — hidden from tab bar, accessible via Quick Action on Home */}
+      <Tabs.Screen
+        name="admin"
+        options={{
+          href: null, // always hidden from tab bar
+          tabBarIcon: ({ focused }) => <TabIcon name="settings-outline" focused={focused} />,
         }}
       />
     </Tabs>

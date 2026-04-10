@@ -181,8 +181,9 @@ export default function DashboardScreen() {
   const h = new Date().getHours()
   const greeting = h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'
 
-  const isResident = role === 'RESIDENT' || role === 'COMMUNITY_ADMIN' || role === 'SUPER_ADMIN'
+  const isResident = role === 'RESIDENT' || role === 'COMMUNITY_ADMIN' || role === 'SUPER_ADMIN' || role === 'MANAGER'
   const isGuard = role === 'GUARD'
+  const isAdmin = role === 'SUPER_ADMIN' || role === 'COMMUNITY_ADMIN' || role === 'MANAGER'
   const { hasPending } = useHasPendingPayments()
 
   return (
@@ -311,6 +312,12 @@ export default function DashboardScreen() {
             />
           )}
           <QuickAction icon="🔧" label="Reportar" onPress={() => router.push('/(app)/workorder/new' as any)} />
+          {isAdmin && (
+            <QuickAction icon="⚙️" label="Panel Admin" onPress={() => router.push('/(app)/(tabs)/admin' as any)} />
+          )}
+          {isAdmin && (
+            <QuickAction icon="🏘️" label="Unidades" onPress={() => router.push('/(app)/units' as any)} />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

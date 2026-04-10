@@ -165,23 +165,103 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── LIST units ─────────────────────────────────────────────
-  fastify.get<{ Params: { communityId: string } }>(
+  // ── LIST units (with optional stats) ──────────────────────
+  fastify.get<{ Params: { communityId: string }; Querystring: { stats?: string } }>(
     '/:communityId/units',
     { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
     async (req, reply) => {
       const { communityId } = req.params
+      const withStats = req.query.stats === 'true'
+
       const units = await fastify.prisma.unit.findMany({
         where: { communityId },
         orderBy: [{ block: 'asc' }, { number: 'asc' }],
         select: {
           id: true, number: true, block: true, floor: true,
           type: true, isOccupied: true, parkingSpots: true,
-          ownerName: true, ownerPhone: true,
+          ownerName: true, ownerPhone: true, ownerEmail: true,
+          notes: true, sqMeters: true,
           _count: { select: { residents: { where: { moveOutDate: null } } } },
+          residents: withStats ? {
+            where: { moveOutDate: null },
+            include: {
+              communityUser: {
+                include: {
+                  user: { select: { firstName: true, lastName: true, email: true, phone: true } },
+                },
+              },
+            },
+          } : false,
+          householdMembers: withStats ? { where: { isActive: true }, select: { id: true } } : false,
+          vehicles: withStats ? { where: { isActive: true }, select: { id: true, plateNumber: true, make: true, model: true } } : false,
         },
       })
-      return reply.send({ units })
+
+      const total    = units.length
+      const occupied = units.filter((u) => u.isOccupied).length
+      const vacant   = total - occupied
+
+      return reply.send({ units, stats: { total, occupied, vacant } })
+    },
+  )
+
+  // ── UNITS REPORT — CSV download ────────────────────────────
+  fastify.get<{ Params: { communityId: string }; Querystring: { format?: string } }>(
+    '/:communityId/units/report',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+
+      const units = await fastify.prisma.unit.findMany({
+        where: { communityId },
+        orderBy: [{ block: 'asc' }, { number: 'asc' }],
+        include: {
+          residents: {
+            where: { moveOutDate: null },
+            include: {
+              communityUser: {
+                include: {
+                  user: { select: { firstName: true, lastName: true, email: true, phone: true } },
+                },
+              },
+            },
+          },
+          vehicles: { where: { isActive: true } },
+          householdMembers: { where: { isActive: true } },
+        },
+      })
+
+      const rows = [
+        ['Bloque', 'Unidad', 'Piso', 'Tipo', 'm²', 'Estacionamientos', 'Estado', 'Ocupación', 'Residente', 'Email', 'Teléfono', 'Propietario', 'Tel. Propietario', 'Vehículos', 'Habitantes adicionales', 'Notas'],
+        ...units.map((u) => {
+          const resident = u.residents[0]
+          const cu = resident?.communityUser
+          const residentName = cu ? `${cu.user.firstName} ${cu.user.lastName}` : ''
+          return [
+            u.block ?? '',
+            u.number,
+            u.floor ?? '',
+            u.type,
+            u.sqMeters ?? '',
+            u.parkingSpots,
+            u.isOccupied ? 'Habitada' : 'Vacante',
+            resident?.occupancyType === 'TENANT' ? 'Inquilino' : (u.isOccupied ? 'Propietario' : ''),
+            residentName,
+            cu?.user.email ?? '',
+            cu?.user.phone ?? '',
+            u.ownerName ?? '',
+            u.ownerPhone ?? '',
+            u.vehicles.map((v) => v.plateNumber).join(' / '),
+            u.householdMembers.length,
+            (u.notes ?? '').replace(/,/g, ';'),
+          ]
+        }),
+      ]
+
+      const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
+      reply.header('Content-Type', 'text/csv; charset=utf-8')
+      reply.header('Content-Disposition', 'attachment; filename="unidades.csv"')
+      return reply.send('\uFEFF' + csv) // BOM for Excel
     },
   )
 

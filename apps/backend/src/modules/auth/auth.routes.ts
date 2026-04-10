@@ -7,6 +7,7 @@ import {
   resetPasswordSchema,
   refreshTokenSchema,
   verifyEmailSchema,
+  changePasswordSchema,
 } from './auth.schema.js'
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
@@ -57,6 +58,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const { token } = verifyEmailSchema.parse(req.body)
     await service.verifyEmail(token)
     return reply.code(200).send({ message: 'Email verified successfully.' })
+  })
+
+  fastify.post('/change-password', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body)
+    await service.changePassword(req.user.sub, currentPassword, newPassword)
+    return reply.code(200).send({ message: 'Contraseña actualizada correctamente.' })
   })
 }
 

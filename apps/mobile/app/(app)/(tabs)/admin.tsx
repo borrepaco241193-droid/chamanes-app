@@ -403,6 +403,23 @@ export default function AdminScreen() {
               <Ionicons name="chevron-forward" size={18} color="#475569" />
             </TouchableOpacity>
 
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/units' as any)}
+              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
+              activeOpacity={0.75}
+            >
+              <View className="w-10 h-10 rounded-xl bg-emerald-500/20 items-center justify-center">
+                <Ionicons name="home-outline" size={20} color="#10B981" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base">Dashboard de unidades</Text>
+                <Text className="text-surface-muted text-xs mt-0.5">
+                  Stats, habitadas/vacantes y descarga de reportes
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+
             {isSuperAdmin && (
               <TouchableOpacity
                 onPress={() => router.push('/(app)/communities' as any)}

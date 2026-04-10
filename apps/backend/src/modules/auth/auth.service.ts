@@ -287,6 +287,26 @@ export class AuthService {
     })
   }
 
+  // ── Change Password ───────────────────────────────────────
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
+
+    const match = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!match) {
+      throw Object.assign(new Error('La contraseña actual es incorrecta'), { statusCode: 400 })
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } })
+
+    // Revoke all refresh tokens — force re-login on other devices
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+  }
+
   // ── Verify Email ──────────────────────────────────────────
   async verifyEmail(token: string) {
     const user = await this.prisma.user.findFirst({

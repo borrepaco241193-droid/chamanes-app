@@ -9,11 +9,11 @@ function useCommunityId() {
   return useAuthStore((s) => s.user?.communityId ?? '')
 }
 
-export function useUnits() {
+export function useUnits(withStats = false) {
   const communityId = useCommunityId()
   return useQuery({
-    queryKey: ['units', communityId],
-    queryFn: () => residentService.listUnits(communityId),
+    queryKey: ['units', communityId, withStats],
+    queryFn: () => residentService.listUnits(communityId, withStats),
     enabled: !!communityId,
     staleTime: 30_000,
   })

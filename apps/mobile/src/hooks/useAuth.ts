@@ -80,6 +80,13 @@ export function useResetPassword() {
   })
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      authService.changePassword(currentPassword, newPassword),
+  })
+}
+
 export function useMe() {
   const { isAuthenticated } = useAuthStore()
   return useQuery({
