@@ -81,6 +81,13 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/payments/:paymentId/checkout',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
+      if (!env.STRIPE_SECRET_KEY) {
+        return reply.code(503).send({
+          error: 'ServiceUnavailable',
+          message: 'El procesamiento de pagos no está configurado aún. Contacta al administrador.',
+        })
+      }
+
       const body = createCheckoutSchema.parse(req.body ?? {})
       const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
         req.user.communityRole ?? req.user.role,

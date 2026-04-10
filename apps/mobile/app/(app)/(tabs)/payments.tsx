@@ -126,7 +126,13 @@ export default function PaymentsScreen() {
         ],
       )
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo iniciar el pago')
+      const msg = err?.response?.data?.message ?? 'No se pudo iniciar el pago'
+      const isUnavailable = err?.response?.status === 503
+      Alert.alert(
+        isUnavailable ? 'Pagos no disponibles' : 'Error al pagar',
+        msg,
+        [{ text: 'Entendido' }],
+      )
     } finally {
       setPayingId(null)
     }
