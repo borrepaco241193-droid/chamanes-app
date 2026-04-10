@@ -23,6 +23,7 @@ import staffRoutes from './modules/staff/staff.routes.js'
 import workOrderRoutes from './modules/workorders/workorder.routes.js'
 import adminRoutes from './modules/admin/admin.routes.js'
 import notificationRoutes from './modules/notifications/notification.routes.js'
+import gateRoutes from './modules/gate/gate.routes.js'
 
 export async function buildApp() {
   const app = Fastify({
@@ -95,6 +96,7 @@ export async function buildApp() {
   await app.register(workOrderRoutes, { prefix: '/api/v1/communities' })
   await app.register(adminRoutes, { prefix: '/api/v1/communities' })
   await app.register(notificationRoutes, { prefix: '/api/v1/notifications' })
+  await app.register(gateRoutes, { prefix: '/api/v1/communities' })
 
   // ── Error handler ─────────────────────────────────────────
   app.setErrorHandler((err, req, reply) => {
