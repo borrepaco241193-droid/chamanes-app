@@ -83,8 +83,8 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/visitors/:passId',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const isAdmin = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN].includes(
-        (req.user.communityRole ?? req.user.role) as UserRole,
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
+        req.user.communityRole ?? req.user.role,
       )
       const pass = await getVisitorPass(
         fastify.prisma,
@@ -103,8 +103,8 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
       const body = revokePassSchema.parse(req.body ?? {})
-      const isAdmin = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN].includes(
-        (req.user.communityRole ?? req.user.role) as UserRole,
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
+        req.user.communityRole ?? req.user.role,
       )
       const pass = await revokeVisitorPass(
         fastify.prisma,
