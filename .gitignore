@@ -52,3 +52,4 @@ expo-env.d.ts
 # Firebase
 *-service-account.json
 firebase-adminsdk-*.json
+serviceAccountKey.json

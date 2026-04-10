@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client'
+import { PrismaClient, UserRole, PaymentStatus, PaymentType } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 // ============================================================
@@ -175,12 +175,66 @@ async function main() {
   }
   console.log(`✅ Common areas seeded`)
 
+  // ── Demo Payments ─────────────────────────────────────────
+  const now = new Date()
+  const demoPayments = [
+    {
+      month: now.getMonth() + 1, // current month — PENDING
+      year: now.getFullYear(),
+      dueDate: new Date(now.getFullYear(), now.getMonth(), 5),
+      status: PaymentStatus.PENDING,
+    },
+    {
+      month: now.getMonth() === 0 ? 12 : now.getMonth(), // last month — COMPLETED
+      year: now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear(),
+      dueDate: new Date(now.getFullYear(), now.getMonth() - 1, 5),
+      status: PaymentStatus.COMPLETED,
+      paidAt: new Date(now.getFullYear(), now.getMonth() - 1, 3),
+    },
+  ]
+
+  for (const p of demoPayments) {
+    const existing = await prisma.payment.findFirst({
+      where: {
+        communityId: community.id,
+        unitId: unit.id,
+        periodMonth: p.month,
+        periodYear: p.year,
+        type: PaymentType.MAINTENANCE_FEE,
+      },
+    })
+    if (!existing) {
+      await prisma.payment.create({
+        data: {
+          communityId: community.id,
+          userId: resident.id,
+          unitId: unit.id,
+          amount: 1500,
+          currency: 'MXN',
+          type: PaymentType.MAINTENANCE_FEE,
+          description: `Cuota de mantenimiento ${getMonthName(p.month)} ${p.year}`,
+          status: p.status,
+          dueDate: p.dueDate,
+          periodMonth: p.month,
+          periodYear: p.year,
+          paidAt: 'paidAt' in p ? p.paidAt : null,
+        },
+      })
+    }
+  }
+  console.log(`✅ Demo payments seeded`)
+
   console.log('\n🎉 Seed complete!\n')
   console.log('Test accounts:')
   console.log('  Super Admin:  admin@chamanes.app     / Admin1234!')
   console.log('  Com. Admin:   manager@chamanes.app   / Manager1234!')
   console.log('  Resident:     resident@chamanes.app  / Resident1234!')
   console.log('  Guard:        guard@chamanes.app     / Guard1234!')
+}
+
+function getMonthName(month: number): string {
+  const names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+  return names[month - 1] ?? String(month)
 }
 
 main()

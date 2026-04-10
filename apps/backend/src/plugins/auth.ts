@@ -31,7 +31,7 @@ declare module 'fastify' {
 
 const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
   // Add user placeholder on every request
-  fastify.decorateRequest('user', null)
+  fastify.decorateRequest('user', { getter: () => ({} as JWTPayload) })
 
   // authenticate — verifies Bearer token, sets req.user
   fastify.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {

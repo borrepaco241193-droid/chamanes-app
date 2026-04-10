@@ -17,7 +17,7 @@
       "android": { "buildType": "apk" },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_BACKEND_URL"
+        "EXPO_PUBLIC_API_URL": "https://chamanes-app-production.up.railway.app"
       }
     },
     "production": {
@@ -25,7 +25,7 @@
       "android": { "buildType": "app-bundle" },
       "env": {
         "NODE_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://YOUR_RAILWAY_BACKEND_URL"
+        "EXPO_PUBLIC_API_URL": "https://chamanes-app-production.up.railway.app"
       }
     }
   },
