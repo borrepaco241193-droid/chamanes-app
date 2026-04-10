@@ -22,7 +22,7 @@ export interface JWTPayload {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<void>
-    requireRole: (...roles: UserRole[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>
+    requireRole: (...roles: string[]) => (req: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
   interface FastifyRequest {
     user: JWTPayload
@@ -50,7 +50,7 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
   // requireRole — call AFTER authenticate in preHandler array
   fastify.decorate(
     'requireRole',
-    (...roles: UserRole[]) =>
+    (...roles: string[]) =>
       async (req: FastifyRequest, reply: FastifyReply) => {
         const user = req.user
         if (!user) {

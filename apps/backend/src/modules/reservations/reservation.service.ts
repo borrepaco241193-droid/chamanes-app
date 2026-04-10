@@ -44,8 +44,7 @@ export async function getAvailableSlots(
   })
 
   // Generate available slots based on openTime/closeTime and slotDurationMins
-  const [openHour, openMin] = area.openTime.split(':').map(Number)
-  const [closeHour, closeMin] = area.closeTime.split(':').map(Number)
+  // openTime/closeTime used directly via string interpolation below
 
   const slots: { startTime: string; endTime: string; available: boolean }[] = []
   const slotMs = area.slotDurationMins * 60 * 1000

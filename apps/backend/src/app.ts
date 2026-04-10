@@ -97,7 +97,8 @@ export async function buildApp() {
   await app.register(notificationRoutes, { prefix: '/api/v1/notifications' })
 
   // ── Error handler ─────────────────────────────────────────
-  app.setErrorHandler((error, req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
+    const error = err as Error & { statusCode?: number }
     app.log.error({ err: error, url: req.url, method: req.method })
 
     // Zod validation errors
@@ -109,7 +110,7 @@ export async function buildApp() {
       })
     }
 
-    const statusCode = (error as any).statusCode ?? 500
+    const statusCode = error.statusCode ?? 500
     return reply.code(statusCode).send({
       error: statusCode === 500 ? 'Internal Server Error' : error.message,
       message: statusCode === 500 ? 'Something went wrong' : error.message,
