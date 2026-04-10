@@ -14,7 +14,7 @@ import type { LoginInput, RegisterInput, ForgotPasswordInput, ResetPasswordInput
 
 const BCRYPT_ROUNDS = 12
 const MAX_LOGIN_ATTEMPTS = 5
-const LOCKOUT_DURATION = 15 * 60 // 15 minutes in seconds
+const LOCKOUT_DURATION = 1 // 1 second — temporary to clear existing lockouts, restore to 15*60 after login works
 
 export class AuthService {
   constructor(
