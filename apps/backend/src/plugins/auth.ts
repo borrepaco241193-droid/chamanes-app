@@ -30,8 +30,8 @@ declare module 'fastify' {
 }
 
 const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
-  // Add user placeholder on every request
-  fastify.decorateRequest('user', { getter: () => ({} as JWTPayload) })
+  // Add writable user placeholder on every request (Fastify 5 compatible)
+  fastify.decorateRequest('user', null as unknown as JWTPayload)
 
   // authenticate — verifies Bearer token, sets req.user
   fastify.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -42,9 +42,8 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
       }
       const token = authHeader.slice(7)
       req.user = verifyAccessToken(token)
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : 'unknown'
-      reply.code(401).send({ error: 'Unauthorized', message: `Invalid or expired token: ${reason}` })
+    } catch {
+      reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' })
     }
   })
 
