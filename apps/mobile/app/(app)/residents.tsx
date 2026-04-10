@@ -131,6 +131,11 @@ function NewUnitModal({ visible, onClose }: { visible: boolean; onClose: () => v
 function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClose: () => void; units: { id: string; number: string; block?: string | null }[] }) {
   const { mutateAsync: createResident, isPending } = useCreateResident()
   const communityId = useAuthStore((s) => s.user?.communityId)
+  const currentUser = useAuthStore((s) => s.user)
+  const isTopAdmin =
+    currentUser?.role === 'SUPER_ADMIN' ||
+    currentUser?.communityRole === 'SUPER_ADMIN' ||
+    currentUser?.communityRole === 'COMMUNITY_ADMIN'
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', password: '',
     role: 'RESIDENT', unitId: '', occupancyType: 'OWNER' as OccupancyType,
@@ -173,13 +178,22 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
     }
   }
 
-  const ROLES = [['RESIDENT', 'Residente'], ['COMMUNITY_ADMIN', 'Administrador'], ['MANAGER', 'Manager'], ['GUARD', 'Guardia'], ['STAFF', 'Personal']]
+  const ALL_ROLES: [string, string][] = [
+    ['RESIDENT',        'Residente'],
+    ['COMMUNITY_ADMIN', 'Administrador'],
+    ['MANAGER',         'Manager'],
+    ['GUARD',           'Guardia'],
+    ['STAFF',           'Técnico'],
+  ]
+  const ROLES = isTopAdmin
+    ? ALL_ROLES
+    : ALL_ROLES.filter(([k]) => k !== 'COMMUNITY_ADMIN' && k !== 'MANAGER')
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
-          <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Nuevo residente</Text>
+          <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Nuevo usuario</Text>
           <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: 20 }}>
@@ -253,7 +267,7 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
         <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: '#1E293B' }}>
           <TouchableOpacity onPress={handleSubmit} disabled={isPending}
             style={{ backgroundColor: '#3B82F6', borderRadius: 14, padding: 16, alignItems: 'center' }}>
-            {isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Registrar residente</Text>}
+            {isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Registrar usuario</Text>}
           </TouchableOpacity>
         </View>
       </SafeAreaView>

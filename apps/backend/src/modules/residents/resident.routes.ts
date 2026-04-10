@@ -392,6 +392,16 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       const { communityId } = req.params
       const body = createResidentSchema.parse(req.body)
 
+      // Role privilege check — MANAGER can only create RESIDENT, GUARD, STAFF
+      const requesterIsTopAdmin =
+        req.user.role === 'SUPER_ADMIN' ||
+        req.user.communityRole === 'SUPER_ADMIN' ||
+        req.user.communityRole === 'COMMUNITY_ADMIN'
+
+      if (!requesterIsTopAdmin && (body.role === 'MANAGER' || body.role === 'COMMUNITY_ADMIN')) {
+        return reply.code(403).send({ error: 'Forbidden', message: 'Solo el administrador puede crear managers o administradores' })
+      }
+
       // Look up user by email
       const existingUser = await fastify.prisma.user.findUnique({ where: { email: body.email } })
 
