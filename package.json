@@ -18,7 +18,8 @@
   },
   "devDependencies": {
     "turbo": "^2.0.0",
-    "rimraf": "^5.0.0"
+    "rimraf": "^5.0.0",
+    "react-native": "0.83.4"
   },
   "engines": {
     "node": ">=20.0.0",
