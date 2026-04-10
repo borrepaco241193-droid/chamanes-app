@@ -101,6 +101,11 @@ export interface ResidentPayment {
 // ── Service ───────────────────────────────────────────────────
 
 export const residentService = {
+  async listUnits(communityId: string) {
+    const res = await api.get(`/communities/${communityId}/units`)
+    return res.data as { units: { id: string; number: string; block?: string | null; floor?: number | null; isOccupied: boolean }[] }
+  },
+
   async createUnit(communityId: string, data: {
     number: string; block?: string | null; floor?: number | null
     type?: string; sqMeters?: number | null; parkingSpots?: number

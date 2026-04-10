@@ -17,6 +17,10 @@ export function useLogin() {
     onSuccess: async (data) => {
       await AsyncStorage.setItem('access-token', data.accessToken)
       await AsyncStorage.setItem('refresh-token', data.refreshToken)
+      // communityId may be absent for SUPER_ADMIN — fall back to first community
+      const communityId = data.user.communityId ?? data.user.communities?.[0]?.id
+      const communityRole = data.user.communityRole ?? (data.user.communities?.[0]?.role as any)
+
       setAuth(
         {
           id: data.user.id,
@@ -25,8 +29,8 @@ export function useLogin() {
           lastName: data.user.lastName,
           avatarUrl: data.user.avatarUrl,
           role: data.user.role,
-          communityId: data.user.communityId,
-          communityRole: data.user.communityRole,
+          communityId,
+          communityRole,
         },
         {
           accessToken: data.accessToken,

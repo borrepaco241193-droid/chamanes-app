@@ -6,6 +6,16 @@ function useCommunityId() {
   return useAuthStore((s) => s.user?.communityId ?? '')
 }
 
+export function useUnits() {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['units', communityId],
+    queryFn: () => residentService.listUnits(communityId),
+    enabled: !!communityId,
+    staleTime: 30_000,
+  })
+}
+
 export function useCreateUnit() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()
@@ -14,6 +24,7 @@ export function useCreateUnit() {
       residentService.createUnit(communityId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['units', communityId] })
     },
   })
 }

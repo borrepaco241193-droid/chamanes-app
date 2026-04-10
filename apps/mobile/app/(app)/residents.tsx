@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useResidents, useCreateUnit, useCreateResident, useDeleteResident } from '../../src/hooks/useResidents'
+import { useResidents, useUnits, useCreateUnit, useCreateResident, useDeleteResident } from '../../src/hooks/useResidents'
 import { useAuthStore } from '../../src/stores/auth.store'
 import type { Resident, OccupancyType } from '../../src/services/resident.service'
 import { useDebounce } from '../../src/hooks/useDebounce'
@@ -323,8 +323,9 @@ export default function ResidentsScreen() {
   const { data, isLoading, isRefetching, refetch } = useResidents(
     debouncedSearch ? { search: debouncedSearch } : undefined,
   )
+  const { data: unitsData, refetch: refetchUnits } = useUnits()
   const residents = data?.residents ?? []
-  const units = residents.flatMap(r => r.units).filter(Boolean)
+  const units = unitsData?.units ?? []
 
   function confirmDelete(resident: Resident) {
     Alert.alert(
@@ -411,7 +412,7 @@ export default function ResidentsScreen() {
         />
       )}
 
-      <NewUnitModal visible={showNewUnit} onClose={() => { setShowNewUnit(false); refetch() }} />
+      <NewUnitModal visible={showNewUnit} onClose={() => { setShowNewUnit(false); refetch(); refetchUnits() }} />
       <NewResidentModal visible={showNewResident} onClose={() => { setShowNewResident(false); refetch() }} units={units} />
     </SafeAreaView>
   )

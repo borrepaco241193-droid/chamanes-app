@@ -164,6 +164,26 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── LIST units ─────────────────────────────────────────────
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/units',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const units = await fastify.prisma.unit.findMany({
+        where: { communityId },
+        orderBy: [{ block: 'asc' }, { number: 'asc' }],
+        select: {
+          id: true, number: true, block: true, floor: true,
+          type: true, isOccupied: true, parkingSpots: true,
+          ownerName: true, ownerPhone: true,
+          _count: { select: { residents: { where: { moveOutDate: null } } } },
+        },
+      })
+      return reply.send({ units })
+    },
+  )
+
   // ── UPDATE unit ────────────────────────────────────────────
   fastify.patch<{ Params: { communityId: string; unitId: string }; Body: unknown }>(
     '/:communityId/units/:unitId',
