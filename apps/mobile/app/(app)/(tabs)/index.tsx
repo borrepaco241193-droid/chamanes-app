@@ -215,7 +215,11 @@ export default function DashboardScreen() {
 
   const isResident = role === 'RESIDENT' || role === 'COMMUNITY_ADMIN' || role === 'SUPER_ADMIN' || role === 'MANAGER'
   const isGuard = role === 'GUARD'
-  const isAdmin = role === 'SUPER_ADMIN' || role === 'COMMUNITY_ADMIN' || role === 'MANAGER'
+  const isAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER'
   const { hasPending } = useHasPendingPayments()
 
   return (

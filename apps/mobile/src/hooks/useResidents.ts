@@ -78,8 +78,9 @@ export function useResidents(params?: { search?: string; block?: string }) {
   })
 }
 
-export function useResident(userId: string) {
-  const communityId = useCommunityId()
+export function useResident(userId: string, communityIdOverride?: string) {
+  const storeCommunityId = useCommunityId()
+  const communityId = communityIdOverride || storeCommunityId
   return useQuery({
     queryKey: ['resident', communityId, userId],
     queryFn: () => residentService.get(communityId, userId),

@@ -144,7 +144,7 @@ export const residentService = {
     emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelation?: string | null
   }) {
     const res = await api.post(`/communities/${communityId}/residents`, data)
-    return res.data
+    return res.data as { ok: boolean; userId: string; communityUserId: string; tempPassword: string | null }
   },
 
   async deleteResident(communityId: string, userId: string) {

@@ -144,7 +144,7 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
     }
     if (!communityId) return Alert.alert('Error de sesión', 'No se detectó la comunidad activa. Cierra sesión y vuelve a entrar.')
     try {
-      await createResident({
+      const result = await createResident({
         firstName:    form.firstName.trim(),
         lastName:     form.lastName.trim(),
         email:        form.email.trim().toLowerCase(),
@@ -160,7 +160,14 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
       })
       onClose()
       setForm({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'RESIDENT', unitId: '', occupancyType: 'OWNER', emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '' })
-      Alert.alert('Listo', form.password ? 'Residente registrado. Ya puede iniciar sesión.' : 'Residente registrado. Se generó una contraseña temporal — recuérdale que la cambie.')
+      if (result?.tempPassword) {
+        Alert.alert(
+          'Residente registrado',
+          `Contraseña temporal generada:\n\n${result.tempPassword}\n\nCompártela con el residente y pídele que la cambie al iniciar sesión.`,
+        )
+      } else {
+        Alert.alert('Listo', 'Residente registrado. Ya puede iniciar sesión.')
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo registrar el residente')
     }
@@ -257,6 +264,7 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
 // ── Resident Card ─────────────────────────────────────────────
 
 function ResidentCard({ resident, onDelete }: { resident: Resident; onDelete: (r: Resident) => void }) {
+  const communityId = useAuthStore((s) => s.user?.communityId ?? '')
   const unit = resident.units[0]
   const unitLabel = unit ? `${unit.block ? `${unit.block}-` : ''}${unit.number}` : '—'
   const occupancy = unit?.occupancyType ?? 'OWNER'
@@ -266,7 +274,7 @@ function ResidentCard({ resident, onDelete }: { resident: Resident; onDelete: (r
   return (
     <View style={{ backgroundColor: '#1E293B', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: hasPending ? '#F9731640' : '#334155', overflow: 'hidden' }}>
       <TouchableOpacity
-        onPress={() => router.push(`/(app)/resident/${resident.id}` as any)}
+        onPress={() => router.push(`/(app)/resident/${resident.id}?cid=${communityId}` as any)}
         style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
         activeOpacity={0.75}
       >

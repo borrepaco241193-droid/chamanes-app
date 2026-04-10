@@ -382,8 +382,16 @@ function useIsAdmin() {
 
 export default function ResidentDetailScreen() {
   const isAdmin = useIsAdmin()
-  const { id } = useLocalSearchParams<{ id: string }>()
-  const { data: resident, isLoading, refetch } = useResident(id ?? '')
+  const { id, cid } = useLocalSearchParams<{ id: string; cid?: string }>()
+  // cid is passed from the residents list to ensure communityId is always available
+  const { data: resident, isLoading, refetch } = useResident(id ?? '', cid as string | undefined)
+
+  // All hooks must be called before any early returns (React rules of hooks)
+  const { mutateAsync: deleteMember } = useDeleteMember(resident?.units?.[0]?.id ?? '')
+  const { mutateAsync: deleteVehicle } = useDeleteVehicle(resident?.units?.[0]?.id ?? '')
+  const [showEdit, setShowEdit] = useState(false)
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [showAddVehicle, setShowAddVehicle] = useState(false)
 
   if (!isAdmin) {
     return (
@@ -394,12 +402,6 @@ export default function ResidentDetailScreen() {
       </SafeAreaView>
     )
   }
-  const { mutateAsync: deleteMember } = useDeleteMember(resident?.units?.[0]?.id ?? '')
-  const { mutateAsync: deleteVehicle } = useDeleteVehicle(resident?.units?.[0]?.id ?? '')
-
-  const [showEdit, setShowEdit] = useState(false)
-  const [showAddMember, setShowAddMember] = useState(false)
-  const [showAddVehicle, setShowAddVehicle] = useState(false)
 
   const unit = resident?.units?.[0]
 
