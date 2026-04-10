@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { Svg, Rect, Text as SvgText, G } from 'react-native-svg'
 import { useDashboardStats, usePaymentReport, useAccessReport } from '../../../src/hooks/useAdmin'
 import { useAuthStore } from '../../../src/stores/auth.store'
+import { router } from 'expo-router'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -351,6 +352,25 @@ export default function AdminScreen() {
                 </View>
               </View>
             )}
+
+            {/* Admin Quick Actions */}
+            <Text className="text-white font-bold text-base mt-2 mb-1">Gestión</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/residents' as any)}
+              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
+              activeOpacity={0.75}
+            >
+              <View className="w-10 h-10 rounded-xl bg-blue-500/20 items-center justify-center">
+                <Ionicons name="people-outline" size={20} color="#3B82F6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base">Gestionar residentes</Text>
+                <Text className="text-surface-muted text-xs mt-0.5">
+                  Editar info, familia, vehículos y pagos
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
 
           </View>
         )}

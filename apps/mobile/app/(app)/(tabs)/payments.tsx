@@ -12,6 +12,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import { usePayments, useCheckout } from '../../../src/hooks/usePayments'
+import { useMarkPaid } from '../../../src/hooks/useResidents'
+import { useAuthStore } from '../../../src/stores/auth.store'
 import { format, isPast, differenceInDays } from 'date-fns'
 import type { Payment, PaymentStatus } from '../../../src/services/payment.service'
 
@@ -29,7 +31,7 @@ const FILTERS: { label: string; value?: PaymentStatus }[] = [
   { label: 'Pagados', value: 'COMPLETED' },
 ]
 
-function PaymentCard({ payment, onPay }: { payment: Payment; onPay: (id: string) => void }) {
+function PaymentCard({ payment, onPay, onMarkPaid, isAdmin }: { payment: Payment; onPay: (id: string) => void; onMarkPaid?: (id: string) => void; isAdmin?: boolean }) {
   const cfg = STATUS_CONFIG[payment.status] ?? STATUS_CONFIG.PENDING
   const isDue = payment.dueDate && isPast(new Date(payment.dueDate)) && payment.status === 'PENDING'
   const daysUntilDue = payment.dueDate
@@ -83,13 +85,25 @@ function PaymentCard({ payment, onPay }: { payment: Payment; onPay: (id: string)
         </View>
 
         {payment.status === 'PENDING' && (
-          <TouchableOpacity
-            onPress={() => onPay(payment.id)}
-            className="bg-primary-500 px-5 py-2.5 rounded-xl"
-            activeOpacity={0.8}
-          >
-            <Text className="text-white font-semibold text-sm">Pagar</Text>
-          </TouchableOpacity>
+          <View style={{ gap: 8, alignItems: 'flex-end' }}>
+            <TouchableOpacity
+              onPress={() => onPay(payment.id)}
+              className="bg-primary-500 px-5 py-2.5 rounded-xl"
+              activeOpacity={0.8}
+            >
+              <Text className="text-white font-semibold text-sm">Pagar online</Text>
+            </TouchableOpacity>
+            {isAdmin && onMarkPaid && (
+              <TouchableOpacity
+                onPress={() => onMarkPaid(payment.id)}
+                style={{ backgroundColor: '#22C55E20', borderWidth: 1, borderColor: '#22C55E40', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="cash-outline" size={14} color="#22C55E" />
+                <Text style={{ color: '#22C55E', fontWeight: '600', fontSize: 12 }}>Efectivo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
         {payment.status === 'COMPLETED' && payment.stripeReceiptUrl && (
           <TouchableOpacity
@@ -108,8 +122,39 @@ function PaymentCard({ payment, onPay }: { payment: Payment; onPay: (id: string)
 export default function PaymentsScreen() {
   const [filter, setFilter] = useState<PaymentStatus | undefined>(undefined)
   const { data, isLoading, refetch, isRefetching } = usePayments(filter)
-  const { mutateAsync: getCheckout, isPending: isCheckingOut } = useCheckout()
+  const { mutateAsync: getCheckout } = useCheckout()
+  const { mutateAsync: markPaid, isPending: isMarkingPaid } = useMarkPaid()
   const [payingId, setPayingId] = useState<string | null>(null)
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.communityRole === 'COMMUNITY_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.communityRole === 'SUPER_ADMIN'
+
+  async function handleMarkPaid(paymentId: string) {
+    Alert.alert(
+      'Registrar pago manual',
+      '¿Cómo recibiste el pago?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Efectivo',
+          onPress: () => doMarkPaid(paymentId, 'CASH'),
+        },
+        {
+          text: 'Transferencia',
+          onPress: () => doMarkPaid(paymentId, 'TRANSFER'),
+        },
+      ],
+    )
+  }
+
+  async function doMarkPaid(paymentId: string, method: 'CASH' | 'TRANSFER') {
+    try {
+      await markPaid({ paymentId, data: { paymentMethod: method } })
+      refetch()
+      Alert.alert('Listo', 'Pago registrado correctamente')
+    } catch {
+      Alert.alert('Error', 'No se pudo registrar el pago')
+    }
+  }
 
   async function handlePay(paymentId: string) {
     setPayingId(paymentId)
@@ -195,6 +240,8 @@ export default function PaymentsScreen() {
             <PaymentCard
               payment={item}
               onPay={payingId === item.id ? () => {} : handlePay}
+              onMarkPaid={handleMarkPaid}
+              isAdmin={isAdmin}
             />
           )}
           contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}

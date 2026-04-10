@@ -22,6 +22,8 @@ export default function AppLayout() {
       <Stack.Screen name="workorder/new" options={{ presentation: 'modal' }} />
       <Stack.Screen name="workorder/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="residents" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="resident/[id]" options={{ animation: 'slide_from_right' }} />
     </Stack>
   )
 }

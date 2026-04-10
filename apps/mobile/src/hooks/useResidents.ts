@@ -1,0 +1,126 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { residentService } from '../services/resident.service'
+import { useAuthStore } from '../stores/auth.store'
+
+function useCommunityId() {
+  return useAuthStore((s) => s.user?.communityId ?? '')
+}
+
+export function useResidents(params?: { search?: string; block?: string }) {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['residents', communityId, params],
+    queryFn: () => residentService.list(communityId, params),
+    enabled: !!communityId,
+    staleTime: 60_000,
+  })
+}
+
+export function useResident(userId: string) {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['resident', communityId, userId],
+    queryFn: () => residentService.get(communityId, userId),
+    enabled: !!communityId && !!userId,
+    staleTime: 30_000,
+  })
+}
+
+export function useUpdateResident(userId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof residentService.update>[2]) =>
+      residentService.update(communityId, userId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId, userId] })
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}
+
+export function useAddMember(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof residentService.addMember>[2]) =>
+      residentService.addMember(communityId, unitId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useUpdateMember(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ memberId, data }: { memberId: string; data: Parameters<typeof residentService.updateMember>[3] }) =>
+      residentService.updateMember(communityId, unitId, memberId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useDeleteMember(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (memberId: string) => residentService.deleteMember(communityId, unitId, memberId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useAddVehicle(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof residentService.addVehicle>[2]) =>
+      residentService.addVehicle(communityId, unitId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useUpdateVehicle(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ vehicleId, data }: { vehicleId: string; data: Parameters<typeof residentService.updateVehicle>[3] }) =>
+      residentService.updateVehicle(communityId, unitId, vehicleId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useDeleteVehicle(unitId: string) {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vehicleId: string) => residentService.deleteVehicle(communityId, unitId, vehicleId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
+
+export function useMarkPaid() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ paymentId, data }: {
+      paymentId: string
+      data: Parameters<typeof residentService.markPaid>[2]
+    }) => residentService.markPaid(communityId, paymentId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
+    },
+  })
+}
