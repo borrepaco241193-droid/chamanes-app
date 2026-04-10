@@ -24,6 +24,7 @@ export default function AppLayout() {
       <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="residents" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="resident/[id]" options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="communities" options={{ animation: 'slide_from_right' }} />
     </Stack>
   )
 }

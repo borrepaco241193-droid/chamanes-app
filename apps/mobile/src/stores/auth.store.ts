@@ -30,6 +30,8 @@ interface AuthState {
   // Actions
   setAuth: (user: AuthUser, tokens: AuthTokens) => void
   setUser: (user: AuthUser) => void
+  /** Switch active community without re-login (for SUPER_ADMIN managing multiple communities) */
+  setCommunity: (communityId: string, communityRole?: AuthUser['communityRole']) => void
   logout: () => void
   setHydrated: () => void
 }
@@ -47,6 +49,13 @@ export const useAuthStore = create<AuthState>()(
 
       setUser: (user) =>
         set({ user }),
+
+      setCommunity: (communityId, communityRole) =>
+        set((state) => ({
+          user: state.user
+            ? { ...state.user, communityId, communityRole: communityRole ?? state.user.communityRole }
+            : state.user,
+        })),
 
       logout: () =>
         set({ user: null, tokens: null, isAuthenticated: false }),

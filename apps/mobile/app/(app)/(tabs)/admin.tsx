@@ -188,6 +188,9 @@ export default function AdminScreen() {
     )
   }
 
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  const communityId = user?.communityId
+
   return (
     <SafeAreaView className="flex-1 bg-surface">
       <ScrollView
@@ -212,6 +215,34 @@ export default function AdminScreen() {
             <Ionicons name="refresh-outline" size={18} color="#94A3B8" />
           </TouchableOpacity>
         </View>
+
+        {/* SUPER_ADMIN: community selector banner */}
+        {isSuperAdmin && !communityId && (
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/communities' as any)}
+            style={{ marginHorizontal: 24, marginBottom: 16, backgroundColor: '#F59E0B20', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: '#F59E0B40' }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="warning-outline" size={22} color="#F59E0B" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 14 }}>Ninguna comunidad activa</Text>
+              <Text style={{ color: '#D97706', fontSize: 12, marginTop: 2 }}>Toca aquí para seleccionar o crear una comunidad</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
+          </TouchableOpacity>
+        )}
+
+        {isSuperAdmin && communityId && (
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/communities' as any)}
+            style={{ marginHorizontal: 24, marginBottom: 16, backgroundColor: '#1E293B', borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#334155' }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="business-outline" size={18} color="#3B82F6" />
+            <Text style={{ color: '#94A3B8', fontSize: 12, flex: 1 }}>Cambiando comunidad activa</Text>
+            <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600' }}>Cambiar</Text>
+          </TouchableOpacity>
+        )}
 
         {isLoading ? (
           <View className="items-center justify-center py-24">
@@ -371,6 +402,25 @@ export default function AdminScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color="#475569" />
             </TouchableOpacity>
+
+            {isSuperAdmin && (
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/communities' as any)}
+                className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
+                activeOpacity={0.75}
+              >
+                <View className="w-10 h-10 rounded-xl bg-violet-500/20 items-center justify-center">
+                  <Ionicons name="business-outline" size={20} color="#8B5CF6" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-white font-semibold text-base">Gestionar comunidades</Text>
+                  <Text className="text-surface-muted text-xs mt-0.5">
+                    Crear, editar y cambiar comunidad activa
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#475569" />
+              </TouchableOpacity>
+            )}
 
           </View>
         )}

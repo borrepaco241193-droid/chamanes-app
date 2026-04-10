@@ -3,6 +3,9 @@ import { residentService } from '../services/resident.service'
 import { useAuthStore } from '../stores/auth.store'
 
 function useCommunityId() {
+  // Falls back to '' — callers use `enabled: !!communityId` to block fetches when unset.
+  // communityId gets set on login (from JWT or communities[0]) or via setCommunity() when
+  // a SUPER_ADMIN picks a community from the community selector screen.
   return useAuthStore((s) => s.user?.communityId ?? '')
 }
 
