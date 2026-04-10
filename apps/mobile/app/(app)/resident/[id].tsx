@@ -11,6 +11,7 @@ import {
   useAddMember, useDeleteMember,
   useAddVehicle, useDeleteVehicle,
 } from '../../../src/hooks/useResidents'
+import { useAuthStore } from '../../../src/stores/auth.store'
 import type {
   HouseholdMember, Vehicle, MemberRelationship, VehicleType, OccupancyType,
 } from '../../../src/services/resident.service'
@@ -363,9 +364,29 @@ function EditResidentModal({
 
 // ── Main Detail Screen ────────────────────────────────────────
 
+function useIsAdmin() {
+  const user = useAuthStore((s) => s.user)
+  return (
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN'
+  )
+}
+
 export default function ResidentDetailScreen() {
+  const isAdmin = useIsAdmin()
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data: resident, isLoading, refetch } = useResident(id ?? '')
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Ionicons name="lock-closed-outline" size={48} color="#334155" />
+        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>Acceso restringido</Text>
+        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>Solo administradores pueden ver este perfil.</Text>
+      </SafeAreaView>
+    )
+  }
   const { mutateAsync: deleteMember } = useDeleteMember(resident?.units?.[0]?.id ?? '')
   const { mutateAsync: deleteVehicle } = useDeleteVehicle(resident?.units?.[0]?.id ?? '')
 

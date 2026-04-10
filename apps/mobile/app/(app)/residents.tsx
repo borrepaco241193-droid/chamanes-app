@@ -5,8 +5,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useResidents } from '../../src/hooks/useResidents'
+import { useAuthStore } from '../../src/stores/auth.store'
 import type { Resident } from '../../src/services/resident.service'
 import { useDebounce } from '../../src/hooks/useDebounce'
 
@@ -80,9 +81,29 @@ function ResidentCard({ resident }: { resident: Resident }) {
   )
 }
 
+function useIsAdmin() {
+  const user = useAuthStore((s) => s.user)
+  return (
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN'
+  )
+}
+
 export default function ResidentsScreen() {
+  const isAdmin = useIsAdmin()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 400)
+
+  if (!isAdmin) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Ionicons name="lock-closed-outline" size={48} color="#334155" />
+        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>Acceso restringido</Text>
+        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>Solo administradores pueden gestionar residentes.</Text>
+      </SafeAreaView>
+    )
+  }
 
   const { data, isLoading, isRefetching, refetch } = useResidents(
     debouncedSearch ? { search: debouncedSearch } : undefined,
