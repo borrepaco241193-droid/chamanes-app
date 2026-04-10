@@ -1,19 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
 
-// EXPO_PUBLIC_ variables are inlined at build time by Metro
-// .env.local sets EXPO_PUBLIC_API_URL for local dev
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   Constants.expoConfig?.extra?.apiUrl ??
   'http://192.168.1.76:3000'
-
-// ============================================================
-// Axios instance with JWT interceptor
-// - Attaches access token to every request (reads from Zustand store directly)
-// - Auto-refreshes token on 401, retries original request
-// - Logs out on refresh failure
-// ============================================================
 
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
@@ -24,45 +16,41 @@ export const api = axios.create({
   },
 })
 
-// Lazy import to avoid circular dependency (store imports api, api imports store)
-function getStore() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require('../stores/auth.store').useAuthStore
-}
-
-// Request interceptor: attach Bearer token synchronously from in-memory store
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getStore().getState().tokens?.accessToken
+// ── Request interceptor ───────────────────────────────────────
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const token = await AsyncStorage.getItem('access-token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
 })
 
-// Response interceptor: handle token refresh
+// ── Response interceptor — auto refresh on 401 ───────────────
 api.interceptors.response.use(
-  (response) => response,
+  (res) => res,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+    const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true
 
       try {
-        const store = getStore().getState()
-        const refreshToken = store.tokens?.refreshToken
-        if (!refreshToken) throw new Error('No refresh token')
+        const refresh = await AsyncStorage.getItem('refresh-token')
+        if (!refresh) throw new Error('no refresh token')
 
-        const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { refreshToken })
+        const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
+          refreshToken: refresh,
+        })
+        const tokens = data?.data ?? data
 
-        // Update store with new tokens (persist middleware handles SecureStore write)
-        store.setAuth(store.user!, data.data)
+        await AsyncStorage.setItem('access-token', tokens.accessToken)
+        await AsyncStorage.setItem('refresh-token', tokens.refreshToken)
 
-        originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`
-        return api(originalRequest)
+        original.headers.Authorization = `Bearer ${tokens.accessToken}`
+        return api(original)
       } catch {
-        // Refresh failed — force logout
-        getStore().getState().logout()
+        await AsyncStorage.removeItem('access-token')
+        await AsyncStorage.removeItem('refresh-token')
         return Promise.reject(error)
       }
     }

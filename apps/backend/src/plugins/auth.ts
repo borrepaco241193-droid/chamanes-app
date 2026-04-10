@@ -42,8 +42,9 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
       }
       const token = authHeader.slice(7)
       req.user = verifyAccessToken(token)
-    } catch {
-      reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or expired token' })
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'unknown'
+      reply.code(401).send({ error: 'Unauthorized', message: `Invalid or expired token: ${reason}` })
     }
   })
 

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { useMe } from '../../../src/hooks/useAuth'
+import { useHasPendingPayments } from '../../../src/hooks/usePayments'
 import { gateService } from '../../../src/services/gate.service'
 import { Ionicons } from '@expo/vector-icons'
 import { useRef, useState } from 'react'
@@ -30,9 +31,10 @@ const ROLE_LABEL: Record<string, string> = {
 type GateButtonProps = {
   type: 'entry' | 'exit'
   communityId: string
+  locked?: boolean
 }
 
-function GateButton({ type, communityId }: GateButtonProps) {
+function GateButton({ type, communityId, locked = false }: GateButtonProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const scale = useRef(new Animated.Value(1)).current
 
@@ -44,7 +46,11 @@ function GateButton({ type, communityId }: GateButtonProps) {
   const successMsg = isEntry ? '¡Puerta de entrada abierta!' : '¡Puerta de salida abierta!'
 
   async function handlePress() {
-    if (status === 'loading') return
+    if (status === 'loading' || locked) return
+    if (locked) {
+      Alert.alert('Acceso restringido', 'Tienes pagos pendientes. Realiza tu pago para usar esta función.')
+      return
+    }
 
     // Scale animation feedback
     Animated.sequence([
@@ -72,7 +78,7 @@ function GateButton({ type, communityId }: GateButtonProps) {
     }
   }
 
-  const bgColor =
+  const bgColor = locked ? '#334155' :
     status === 'success' ? '#22C55E' :
     status === 'error'   ? '#EF4444' :
     darkColor
@@ -95,7 +101,15 @@ function GateButton({ type, communityId }: GateButtonProps) {
           elevation: 8,
         }}
       >
-        {status === 'loading' ? (
+        {locked ? (
+          <>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Ionicons name="lock-closed" size={32} color="#64748B" />
+            </View>
+            <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 14, textAlign: 'center' }}>{label}</Text>
+            <Text style={{ color: '#475569', fontSize: 11, marginTop: 4, textAlign: 'center' }}>Pago pendiente</Text>
+          </>
+        ) : status === 'loading' ? (
           <ActivityIndicator color="white" size="large" />
         ) : status === 'success' ? (
           <>
@@ -132,7 +146,7 @@ function GateButton({ type, communityId }: GateButtonProps) {
 }
 
 // ── Quick Action ──────────────────────────────────────────────
-function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function QuickAction({ icon, label, onPress, locked }: { icon: string; label: string; onPress: () => void; locked?: boolean }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -145,12 +159,13 @@ function QuickAction({ icon, label, onPress }: { icon: string; label: string; on
         alignItems: 'center',
         gap: 10,
         borderWidth: 1,
-        borderColor: '#334155',
+        borderColor: locked ? '#1E293B' : '#334155',
+        opacity: locked ? 0.5 : 1,
       }}
       activeOpacity={0.75}
     >
       <Text style={{ fontSize: 28 }}>{icon}</Text>
-      <Text style={{ color: 'white', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
+      <Text style={{ color: locked ? '#64748B' : 'white', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -168,6 +183,7 @@ export default function DashboardScreen() {
 
   const isResident = role === 'RESIDENT' || role === 'COMMUNITY_ADMIN' || role === 'SUPER_ADMIN'
   const isGuard = role === 'GUARD'
+  const { hasPending } = useHasPendingPayments()
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
@@ -226,12 +242,19 @@ export default function DashboardScreen() {
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              <GateButton type="entry" communityId={communityId} />
-              <GateButton type="exit" communityId={communityId} />
+              <GateButton type="entry" communityId={communityId} locked={hasPending} />
+              <GateButton type="exit" communityId={communityId} locked={hasPending} />
             </View>
-            <Text style={{ color: '#475569', fontSize: 11, textAlign: 'center', marginTop: 10 }}>
-              El comando expira en 30 segundos si no hay respuesta del hardware
-            </Text>
+            {hasPending ? (
+              <TouchableOpacity onPress={() => router.push('/(app)/(tabs)/payments')} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+                <Ionicons name="alert-circle-outline" size={14} color="#F97316" />
+                <Text style={{ color: '#F97316', fontSize: 12 }}>Tienes pagos pendientes — toca para pagar</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={{ color: '#475569', fontSize: 11, textAlign: 'center', marginTop: 10 }}>
+                El comando expira en 30 segundos si no hay respuesta del hardware
+              </Text>
+            )}
           </View>
         ) : null}
 
@@ -265,13 +288,27 @@ export default function DashboardScreen() {
         <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', marginBottom: 14 }}>Acciones rápidas</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 }}>
           {role !== 'GUARD' && (
-            <QuickAction icon="👥" label="Invitar visita" onPress={() => router.push('/(app)/(tabs)/visitors')} />
+            <QuickAction
+              icon={hasPending ? '🔒' : '👥'}
+              label="Invitar visita"
+              locked={hasPending}
+              onPress={() => hasPending
+                ? Alert.alert('Pago pendiente', 'Realiza tu pago para crear pases de visita.')
+                : router.push('/(app)/(tabs)/visitors')}
+            />
           )}
           {role !== 'GUARD' && (
             <QuickAction icon="💳" label="Pagar cuota" onPress={() => router.push('/(app)/(tabs)/payments')} />
           )}
           {role !== 'GUARD' && (
-            <QuickAction icon="📅" label="Reservar área" onPress={() => router.push('/(app)/(tabs)/reservations')} />
+            <QuickAction
+              icon={hasPending ? '🔒' : '📅'}
+              label="Reservar área"
+              locked={hasPending}
+              onPress={() => hasPending
+                ? Alert.alert('Pago pendiente', 'Realiza tu pago para hacer reservaciones.')
+                : router.push('/(app)/(tabs)/reservations')}
+            />
           )}
           <QuickAction icon="🔧" label="Reportar" onPress={() => router.push('/(app)/workorder/new' as any)} />
         </View>

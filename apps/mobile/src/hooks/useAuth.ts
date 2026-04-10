@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuthStore } from '../stores/auth.store'
 import { authService } from '../services/auth.service'
 
@@ -13,7 +14,9 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: authService.login,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await AsyncStorage.setItem('access-token', data.accessToken)
+      await AsyncStorage.setItem('refresh-token', data.refreshToken)
       setAuth(
         {
           id: data.user.id,
@@ -47,8 +50,9 @@ export function useLogout() {
         await authService.logout(tokens.refreshToken)
       }
     },
-    onSettled: () => {
-      // Always log out locally even if API call fails
+    onSettled: async () => {
+      await AsyncStorage.removeItem('access-token').catch(() => {})
+      await AsyncStorage.removeItem('refresh-token').catch(() => {})
       logout()
       queryClient.clear()
       router.replace('/(auth)/login')

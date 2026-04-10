@@ -37,6 +37,20 @@ export function useCheckout() {
   })
 }
 
+// Returns true if the resident has any overdue or pending payments
+export function useHasPendingPayments() {
+  const communityId = useCommunityId()
+  const { data, isLoading } = useQuery({
+    queryKey: ['payments', communityId, 'PENDING'],
+    queryFn: () => paymentService.list(communityId, { status: 'PENDING' }),
+    enabled: !!communityId,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000, // auto-check every 5 min
+  })
+  const hasPending = (data?.payments?.length ?? 0) > 0
+  return { hasPending, isLoading }
+}
+
 export function useGenerateFees() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()

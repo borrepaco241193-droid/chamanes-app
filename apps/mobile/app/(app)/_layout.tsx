@@ -18,10 +18,10 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="visitor/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="visitor/new" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="payment/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="reservation/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="workorder/new" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="workorder/[id]" options={{ presentation: 'modal' }} />
       <Stack.Screen name="profile" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="admin" />
     </Stack>
   )
 }
