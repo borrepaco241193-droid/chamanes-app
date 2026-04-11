@@ -171,6 +171,7 @@ model User {
   payments       Payment[]
   refreshTokens  RefreshToken[]
   notifications  Notification[]
+  staffProfile   Staff?
   auditLogs      AuditLog[]
 
   @@map("users")
@@ -460,6 +461,7 @@ model Staff {
   updatedAt   DateTime  @updatedAt
 
   community   Community             @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   checkIns    StaffCheckIn[]
   assignments WorkOrderAssignment[]
 
