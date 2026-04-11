@@ -47,6 +47,16 @@ export function usePendingIdVerifications() {
   })
 }
 
+export function useAccessEvents(params?: { page?: number; type?: string; from?: string; to?: string }) {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['access-events', communityId, params],
+    queryFn: () => adminService.getAccessEvents(communityId, params),
+    enabled: !!communityId,
+    staleTime: 30_000,
+  })
+}
+
 export function useVerifyId() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()

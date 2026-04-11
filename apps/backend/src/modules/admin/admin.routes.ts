@@ -268,6 +268,46 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── ACCESS EVENTS LIST (paginated) ────────────────────────
+
+  fastify.get<{
+    Params: { communityId: string }
+    Querystring: { page?: string; limit?: string; type?: string; from?: string; to?: string }
+  }>(
+    '/:communityId/admin/access-events',
+    { preHandler: adminOnly },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const page  = req.query.page  ? parseInt(req.query.page)  : 1
+      const limit = req.query.limit ? parseInt(req.query.limit) : 30
+      const skip  = (page - 1) * limit
+
+      const where: Record<string, unknown> = { communityId }
+      if (req.query.type) where['type'] = req.query.type
+      if (req.query.from || req.query.to) {
+        where['createdAt'] = {
+          ...(req.query.from ? { gte: new Date(req.query.from) } : {}),
+          ...(req.query.to   ? { lte: new Date(req.query.to)   } : {}),
+        }
+      }
+
+      const [events, total] = await Promise.all([
+        fastify.prisma.accessEvent.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+          include: {
+            visitorPass: { select: { visitorName: true } },
+          },
+        }),
+        fastify.prisma.accessEvent.count({ where }),
+      ])
+
+      return reply.send({ events, total, page, limit, pages: Math.ceil(total / limit) })
+    },
+  )
+
   // ── IDENTITY VERIFICATION (admin approves) ────────────────
 
   // GET /communities/:id/admin/id-pending — users with idPhotoUrl but not idVerified

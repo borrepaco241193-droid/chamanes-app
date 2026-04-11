@@ -54,4 +54,32 @@ export const adminService = {
     const res = await api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve })
     return res.data
   },
+
+  async getAccessEvents(
+    communityId: string,
+    params?: { page?: number; limit?: number; type?: string; from?: string; to?: string },
+  ) {
+    const res = await api.get(`/communities/${communityId}/admin/access-events`, { params })
+    return res.data as {
+      events: AccessEvent[]
+      total: number
+      page: number
+      pages: number
+    }
+  },
+}
+
+export interface AccessEvent {
+  id: string
+  communityId: string
+  type: 'ENTRY' | 'EXIT'
+  method: string
+  personName: string
+  personType: string
+  plateNumber?: string
+  isAllowed: boolean
+  deniedReason?: string
+  notes?: string
+  createdAt: string
+  visitorPass?: { visitorName: string } | null
 }

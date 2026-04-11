@@ -451,39 +451,68 @@ export default function AdminScreen() {
 
             {/* Admin Quick Actions */}
             <Text className="text-white font-bold text-base mt-2 mb-1">Gestión</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(app)/residents' as any)}
-              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
-              activeOpacity={0.75}
-            >
-              <View className="w-10 h-10 rounded-xl bg-blue-500/20 items-center justify-center">
-                <Ionicons name="people-outline" size={20} color="#3B82F6" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-semibold text-base">Gestionar residentes</Text>
-                <Text className="text-surface-muted text-xs mt-0.5">
-                  Editar info, familia, vehículos y pagos
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#475569" />
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => router.push('/(app)/units' as any)}
-              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
-              activeOpacity={0.75}
-            >
-              <View className="w-10 h-10 rounded-xl bg-emerald-500/20 items-center justify-center">
-                <Ionicons name="home-outline" size={20} color="#10B981" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-semibold text-base">Dashboard de unidades</Text>
-                <Text className="text-surface-muted text-xs mt-0.5">
-                  Stats, habitadas/vacantes y descarga de reportes
+            {/* Row: Residentes + Unidades */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/residents' as any)}
+                style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#334155' }}
+                activeOpacity={0.75}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#3B82F620', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  <Ionicons name="people-outline" size={18} color="#3B82F6" />
+                </View>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Residentes</Text>
+                <Text style={{ color: '#64748B', fontSize: 11, marginTop: 2 }}>
+                  {stats?.residents ?? '—'} activos
                 </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#475569" />
-            </TouchableOpacity>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/units' as any)}
+                style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#334155' }}
+                activeOpacity={0.75}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#10B98120', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  <Ionicons name="home-outline" size={18} color="#10B981" />
+                </View>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Unidades</Text>
+                <Text style={{ color: '#64748B', fontSize: 11, marginTop: 2 }}>
+                  {stats?.units.occupied ?? '—'}/{stats?.units.total ?? '—'} ocupadas
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Row: Pagos + Accesos */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/(tabs)/payments' as any)}
+                style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: (stats?.payments.pending ?? 0) > 0 ? '#F59E0B40' : '#334155' }}
+                activeOpacity={0.75}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  <Ionicons name="card-outline" size={18} color="#F59E0B" />
+                </View>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Pagos</Text>
+                <Text style={{ color: (stats?.payments.pending ?? 0) > 0 ? '#F59E0B' : '#64748B', fontSize: 11, marginTop: 2 }}>
+                  {stats?.payments.pending ?? 0} pendientes
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/access-events' as any)}
+                style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#334155' }}
+                activeOpacity={0.75}
+              >
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#06B6D420', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  <Ionicons name="swap-horizontal-outline" size={18} color="#06B6D4" />
+                </View>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }}>Accesos</Text>
+                <Text style={{ color: '#64748B', fontSize: 11, marginTop: 2 }}>
+                  {stats?.visitors.todayEvents ?? 0} eventos hoy
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               onPress={() => router.push('/(app)/reports' as any)}
@@ -496,7 +525,7 @@ export default function AdminScreen() {
               <View className="flex-1">
                 <Text className="text-white font-semibold text-base">Reportes CSV</Text>
                 <Text className="text-surface-muted text-xs mt-0.5">
-                  Accesos, pagos, reservaciones, visitantes
+                  Exportar accesos, pagos, reservaciones, visitantes
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#475569" />
