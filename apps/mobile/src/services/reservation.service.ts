@@ -70,10 +70,25 @@ export const reservationService = {
     return res.data
   },
 
-  async list(communityId: string, upcoming = true): Promise<Reservation[]> {
+  async list(
+    communityId: string,
+    params?: { upcoming?: boolean; status?: string; all?: boolean },
+  ): Promise<Reservation[]> {
     const res = await api.get(`/communities/${communityId}/reservations`, {
-      params: { upcoming: String(upcoming) },
+      params: {
+        upcoming: params?.upcoming !== undefined ? String(params.upcoming) : undefined,
+        status:   params?.status,
+        all:      params?.all ? 'true' : undefined,
+      },
     })
+    return res.data
+  },
+
+  async approve(communityId: string, reservationId: string, approve: boolean): Promise<Reservation> {
+    const res = await api.patch(
+      `/communities/${communityId}/reservations/${reservationId}/approve`,
+      { approve },
+    )
     return res.data
   },
 

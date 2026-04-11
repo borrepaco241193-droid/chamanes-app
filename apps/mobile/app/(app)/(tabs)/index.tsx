@@ -222,7 +222,9 @@ export default function DashboardScreen() {
     user?.communityRole === 'SUPER_ADMIN' ||
     user?.communityRole === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'MANAGER'
-  const { hasPending } = useHasPendingPayments()
+  const { hasPending: hasPendingRaw } = useHasPendingPayments()
+  // Admins/managers are never blocked — pending payments belong to residents
+  const hasPending = isAdmin ? false : hasPendingRaw
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>

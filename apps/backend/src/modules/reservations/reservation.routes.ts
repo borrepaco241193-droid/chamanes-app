@@ -81,21 +81,34 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
   // ── List reservations ─────────────────────────────────────
   fastify.get<{
     Params: { communityId: string }
-    Querystring: { upcoming?: string }
+    Querystring: { upcoming?: string; status?: string; all?: string }
   }>(
     '/:communityId/reservations',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-        req.user.communityRole ?? req.user.role,
-      )
+      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
+      const effectiveRole = req.user.communityRole ?? req.user.role
+      let isAdmin = ADMIN_ROLES.includes(effectiveRole) || req.user.role === UserRole.SUPER_ADMIN
+      if (!isAdmin) {
+        const cu = await fastify.prisma.communityUser.findUnique({
+          where: { userId_communityId: { userId: req.user.sub, communityId: req.params.communityId } },
+          select: { role: true },
+        })
+        if (cu && ADMIN_ROLES.includes(cu.role)) isAdmin = true
+      }
+
       const upcoming = req.query.upcoming !== 'false'
+      const statusFilter = req.query.status
+      const showAll = req.query.all === 'true'
+
       const reservations = await listReservations(
         fastify.prisma,
         req.params.communityId,
         req.user.sub,
         isAdmin,
-        upcoming,
+        showAll ? false : upcoming,
+        statusFilter,
+        isAdmin, // hideResidentInfo for non-admins
       )
       return reply.send(reservations)
     },
@@ -122,8 +135,11 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Admin: approve reservation ────────────────────────────
-  fastify.patch<{ Params: { communityId: string; reservationId: string } }>(
+  // ── Admin: approve or reject reservation ─────────────────
+  fastify.patch<{
+    Params: { communityId: string; reservationId: string }
+    Body: { approve: boolean }
+  }>(
     '/:communityId/reservations/:reservationId/approve',
     {
       preHandler: [
@@ -132,6 +148,15 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (req, reply) => {
+      const { approve } = req.body as { approve: boolean }
+      if (approve === false) {
+        // Reject = cancel with admin reason
+        const reservation = await fastify.prisma.reservation.update({
+          where: { id: req.params.reservationId, communityId: req.params.communityId },
+          data: { status: 'CANCELLED' },
+        })
+        return reply.send(reservation)
+      }
       const reservation = await approveReservation(
         fastify.prisma,
         req.params.communityId,

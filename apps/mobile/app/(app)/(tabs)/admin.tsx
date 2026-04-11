@@ -352,24 +352,30 @@ export default function AdminScreen() {
               }
             />
 
-            {/* Reservations */}
-            <StatCard
-              icon="calendar-outline"
-              iconColor="#10B981"
-              iconBg="bg-emerald-500/20"
-              label="Reservaciones confirmadas"
-              value={stats?.reservations.upcoming ?? 0}
-              sub="próximas"
-              badge={
-                (stats?.reservations.pending ?? 0) > 0
-                  ? {
-                      text: `${stats?.reservations.pending} por aprobar`,
-                      bg: 'bg-amber-500/20',
-                      color: 'text-amber-400',
-                    }
-                  : undefined
-              }
-            />
+            {/* Reservations — tappable, goes to pending if any */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={() => router.push('/(app)/reservations-admin' as any)}
+            >
+              <StatCard
+                icon="calendar-outline"
+                iconColor="#10B981"
+                iconBg="bg-emerald-500/20"
+                label="Reservaciones confirmadas"
+                value={stats?.reservations.upcoming ?? 0}
+                sub={`${stats?.reservations.pending ?? 0} por aprobar — toca para gestionar`}
+                subColor={(stats?.reservations.pending ?? 0) > 0 ? 'text-amber-400' : 'text-surface-muted'}
+                badge={
+                  (stats?.reservations.pending ?? 0) > 0
+                    ? {
+                        text: `${stats?.reservations.pending} por aprobar`,
+                        bg: 'bg-amber-500/20',
+                        color: 'text-amber-400',
+                      }
+                    : undefined
+                }
+              />
+            </TouchableOpacity>
 
             {/* Payment Report Chart */}
             {paymentReport && paymentReport.length > 0 && (

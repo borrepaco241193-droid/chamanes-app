@@ -6,6 +6,8 @@ import {
   AccessMethod,
   VisitorPassStatus,
   ReservationStatus,
+  WorkOrderStatus,
+  WorkOrderPriority,
 } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
@@ -411,6 +413,67 @@ async function main() {
   })
   console.log(`✅ 8 visitor passes + 22 access events created`)
 
+  // ── More Reservations (pending approval) ─────────────────
+  console.log('📋 Creating pending reservations for approval...')
+  const pendingRes = [
+    { res: 0, area: 1, daysFromNowVal: 5,  notes: 'Cumpleaños de mi hijo, aprox 40 personas' },
+    { res: 2, area: 1, daysFromNowVal: 8,  notes: 'Reunión de trabajo, 15 personas' },
+    { res: 4, area: 1, daysFromNowVal: 12, notes: 'Evento de XV años, 80 personas' },
+    { res: 6, area: 3, daysFromNowVal: 3,  notes: null },
+    { res: 8, area: 3, daysFromNowVal: 7,  notes: 'Asado familiar' },
+  ]
+  for (const pr of pendingRes) {
+    const start = daysFromNow(pr.daysFromNowVal)
+    start.setHours(14, 0, 0, 0)
+    const end = new Date(start); end.setHours(18, 0, 0, 0)
+    await prisma.reservation.create({
+      data: {
+        communityId:  COMMUNITY_ID,
+        userId:       createdResidents[pr.res].id,
+        commonAreaId: areaData[pr.area].id,
+        startTime:    start,
+        endTime:      end,
+        status:       ReservationStatus.PENDING,
+        feeAmount:    pr.area === 1 ? 300 : 0,
+        notes:        pr.notes,
+      },
+    })
+  }
+  console.log(`✅ 5 pending reservations created for admin approval`)
+
+  // ── Work Orders ───────────────────────────────────────────
+  console.log('🔧 Creating work orders...')
+  const workOrders = [
+    { title: 'Fuga de agua en baño', description: 'Se reporta fuga en la llave del baño de la unidad A101. Requiere plomero urgente.', category: 'maintenance', priority: WorkOrderPriority.URGENT, unitIdx: 0, location: 'Unidad A101 – Baño principal' },
+    { title: 'Luz fundida en pasillo B2', description: 'El pasillo del segundo piso del bloque B no tiene iluminación desde hace 3 días.', category: 'maintenance', priority: WorkOrderPriority.MEDIUM, unitIdx: null, location: 'Pasillo Bloque B – Piso 2' },
+    { title: 'Limpieza área de alberca', description: 'Se requiere limpieza profunda de la alberca y área circundante. Hojas acumuladas.', category: 'cleaning', priority: WorkOrderPriority.LOW, unitIdx: null, location: 'Área alberca' },
+    { title: 'Puerta de acceso no cierra', description: 'La puerta de acceso principal no cierra correctamente. Problema con el mecanismo.', category: 'security', priority: WorkOrderPriority.HIGH, unitIdx: null, location: 'Entrada principal' },
+    { title: 'Pintura desprendida en fachada', description: 'En el bloque C se observa pintura desprendida en la fachada exterior.', category: 'maintenance', priority: WorkOrderPriority.LOW, unitIdx: null, location: 'Fachada Bloque C' },
+    { title: 'Jardín requiere poda', description: 'El jardín central presenta crecimiento excesivo, se solicita poda general.', category: 'cleaning', priority: WorkOrderPriority.MEDIUM, unitIdx: null, location: 'Jardín central' },
+  ]
+
+  const woStatuses = [WorkOrderStatus.OPEN, WorkOrderStatus.OPEN, WorkOrderStatus.ASSIGNED, WorkOrderStatus.IN_PROGRESS, WorkOrderStatus.OPEN, WorkOrderStatus.OPEN]
+
+  for (let i = 0; i < workOrders.length; i++) {
+    const wo = workOrders[i]
+    const reporter = createdResidents[i % createdResidents.length]
+    await prisma.workOrder.create({
+      data: {
+        communityId:  COMMUNITY_ID,
+        title:        wo.title,
+        description:  wo.description,
+        category:     wo.category,
+        priority:     wo.priority,
+        status:       woStatuses[i],
+        unitId:       wo.unitIdx !== null ? createdUnits[wo.unitIdx].id : null,
+        location:     wo.location,
+        reportedById: reporter.id,
+        dueDate:      i < 2 ? daysFromNow(3) : null,
+      },
+    })
+  }
+  console.log(`✅ 6 work orders created (2 OPEN urgent, 2 OPEN medium/low, 1 ASSIGNED, 1 IN_PROGRESS)`)
+
   // ── Summary ───────────────────────────────────────────────
   console.log('\n🎉 Seed complete!\n')
   console.log('═══════════════════════════════════════════')
@@ -421,7 +484,8 @@ async function main() {
   console.log('  Resident #1:   resident@chamanes.app  / Resident1234! (PENDING payment)')
   console.log('  Resident #11:  ana.f@chamanes.app     / Resident1234! (paid)')
   console.log('  25 units  |  20 residents  |  10 pending payments')
-  console.log('  12 reservations  |  8 visitor passes  |  22 access events')
+  console.log('  17 reservations (5 PENDING approval)  |  8 visitor passes  |  22 access events')
+  console.log('  6 work orders (urgent fuga + puerta, limpieza, jardín, etc.)')
   console.log('═══════════════════════════════════════════')
 }
 

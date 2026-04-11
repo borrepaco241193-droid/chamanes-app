@@ -164,24 +164,44 @@ export async function listReservations(
   userId: string,
   isAdmin: boolean,
   upcoming = true,
+  statusFilter?: string,
+  showResidentInfo = false,
 ) {
   const now = new Date()
-  const where = {
+  const where: Record<string, unknown> = {
     communityId,
     ...(!isAdmin ? { userId } : {}),
     ...(upcoming ? { startTime: { gte: now } } : {}),
-    status: { notIn: [ReservationStatus.CANCELLED] as ReservationStatus[] },
   }
 
-  return prisma.reservation.findMany({
+  if (statusFilter) {
+    where['status'] = statusFilter as ReservationStatus
+  } else if (!statusFilter) {
+    where['status'] = { notIn: [ReservationStatus.CANCELLED] as ReservationStatus[] }
+  }
+
+  const reservations = await prisma.reservation.findMany({
     where,
-    orderBy: { startTime: 'asc' },
-    take: 50,
+    orderBy: statusFilter === 'PENDING' ? { createdAt: 'asc' } : { startTime: 'asc' },
+    take: 100,
     include: {
       commonArea: { select: { name: true, imageUrl: true, openTime: true, closeTime: true } },
-      user: { select: { firstName: true, lastName: true } },
+      // Only include resident details for admins; residents only see their own
+      user: showResidentInfo
+        ? { select: { firstName: true, lastName: true, email: true } }
+        : { select: { firstName: true, lastName: true } },
     },
   })
+
+  // For non-admin residents: hide who made reservations that aren't theirs
+  if (!isAdmin) {
+    return reservations.map((r) => ({
+      ...r,
+      user: r.userId === userId ? r.user : null,
+    }))
+  }
+
+  return reservations
 }
 
 export async function cancelReservation(

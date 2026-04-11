@@ -26,13 +26,26 @@ export function useTimeSlots(areaId: string, date: string) {
   })
 }
 
-export function useReservations(upcoming = true) {
+export function useReservations(params?: { upcoming?: boolean; status?: string; all?: boolean }) {
   const communityId = useCommunityId()
   return useQuery({
-    queryKey: ['reservations', communityId, upcoming],
-    queryFn: () => reservationService.list(communityId, upcoming),
+    queryKey: ['reservations', communityId, params],
+    queryFn: () => reservationService.list(communityId, params),
     enabled: !!communityId,
     staleTime: 30_000,
+  })
+}
+
+export function useApproveReservation() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      reservationService.approve(communityId, id, approve),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['admin-stats', communityId] })
+    },
   })
 }
 
