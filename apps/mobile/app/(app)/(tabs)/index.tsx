@@ -217,6 +217,8 @@ export default function DashboardScreen() {
   const isGuard = role === 'GUARD'
   const isAdmin =
     user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'MANAGER' ||
+    user?.role === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'SUPER_ADMIN' ||
     user?.communityRole === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'MANAGER'

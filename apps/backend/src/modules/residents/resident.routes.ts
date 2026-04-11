@@ -407,15 +407,21 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
 
       let userId: string
 
+      // Resolve globalRole for MANAGER/COMMUNITY_ADMIN so JWT role field is accurate
+      const targetGlobalRole = (body.role === 'MANAGER' || body.role === 'COMMUNITY_ADMIN')
+        ? body.role as UserRole
+        : UserRole.RESIDENT
+
       if (existingUser) {
-        // Update name/phone in case admin is re-registering with corrections
+        // Update name/phone and promote globalRole if assigning a privileged role
         await fastify.prisma.user.update({
           where: { id: existingUser.id },
           data: {
-            firstName: body.firstName,
-            lastName:  body.lastName,
-            phone:     body.phone ?? existingUser.phone,
-            isActive:  true,
+            firstName:  body.firstName,
+            lastName:   body.lastName,
+            phone:      body.phone ?? existingUser.phone,
+            isActive:   true,
+            globalRole: targetGlobalRole,
           },
         })
         userId = existingUser.id
@@ -432,7 +438,7 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
             lastName:     body.lastName,
             phone:        body.phone ?? null,
             passwordHash,
-            globalRole:   UserRole.RESIDENT,
+            globalRole:   targetGlobalRole,
             isVerified:   true,
           },
         })

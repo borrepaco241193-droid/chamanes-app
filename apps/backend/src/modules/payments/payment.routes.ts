@@ -26,9 +26,8 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { communityId: string }
     Querystring: { status?: string; page?: string; limit?: string }
   }>('/:communityId/payments', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-      req.user.communityRole ?? req.user.role,
-    )
+    const effectiveRole = req.user.communityRole ?? req.user.role
+    const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]).includes(effectiveRole)
     const result = await listPayments(
       fastify.prisma,
       req.params.communityId,
@@ -46,9 +45,8 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/payments/:paymentId',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-        req.user.communityRole ?? req.user.role,
-      )
+      const effectiveRole = req.user.communityRole ?? req.user.role
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]).includes(effectiveRole)
       const payment = await getPayment(
         fastify.prisma,
         req.params.communityId,
