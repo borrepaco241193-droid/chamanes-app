@@ -9,7 +9,7 @@ import {
   cancelReservation,
 } from './reservation.service.js'
 import { sendPushNotification } from '../notifications/notification.service.js'
-import { sendEmail, newReservationEmail } from '../../lib/email.js'
+import { sendEmail, newReservationEmail, reservationApprovedEmail, reservationChargeEmail } from '../../lib/email.js'
 
 // ============================================================
 // Reservation Routes
@@ -236,30 +236,31 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
         },
       })
 
-      // Notify resident of confirmed reservation
-      try {
-        await sendPushNotification(fastify.prisma, {
-          userIds: [existing.userId],
-          title: 'Reservación confirmada',
-          body: `Tu reservación${existing.notes ? ` (${existing.notes.split('|')[0].trim()})` : ''} ha sido aprobada`,
-          type: 'reservation_confirmed',
-          data: { reservationId: existing.id, communityId: req.params.communityId },
-        })
-      } catch { /* non-fatal */ }
+      // Fetch resident info for notifications
+      const [resident, community, commonArea] = await Promise.all([
+        fastify.prisma.user.findUnique({
+          where: { id: existing.userId },
+          select: { firstName: true, lastName: true, email: true },
+        }),
+        fastify.prisma.community.findUnique({
+          where: { id: req.params.communityId },
+          select: { name: true, currency: true },
+        }),
+        fastify.prisma.commonArea.findUnique({
+          where: { id: existing.commonAreaId },
+          select: { name: true },
+        }),
+      ])
 
-      // If extra charge was added, create a payment record for the resident
+      const areaName = commonArea?.name ?? 'área común'
+      const residentName = resident ? `${resident.firstName} ${resident.lastName}` : 'Residente'
+
+      // If extra charge was added, create a payment record and notify with charge details
       if (extraCharge && extraCharge > 0) {
-        const [community, unitResident] = await Promise.all([
-          fastify.prisma.community.findUnique({
-            where: { id: req.params.communityId },
-            select: { currency: true },
-          }),
-          fastify.prisma.communityUser.findFirst({
-            where: { userId: existing.userId, communityId: req.params.communityId },
-            include: { unitResidents: { where: { isPrimary: true }, select: { unitId: true }, take: 1 } },
-          }),
-        ])
-
+        const unitResident = await fastify.prisma.communityUser.findFirst({
+          where: { userId: existing.userId, communityId: req.params.communityId },
+          include: { unitResidents: { where: { isPrimary: true }, select: { unitId: true }, take: 1 } },
+        })
         const unitId = unitResident?.unitResidents[0]?.unitId
         if (unitId) {
           await fastify.prisma.payment.create({
@@ -277,6 +278,49 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
               dueDate: existing.startTime,
             },
           })
+        }
+
+        // Push notification with deep-link to payments tab
+        sendPushNotification(fastify.prisma, {
+          userIds: [existing.userId],
+          title: '✅ Reservación aprobada — cargo pendiente',
+          body: `${areaName} aprobada. Cargo de $${extraCharge.toLocaleString()} MXN por pagar.`,
+          type: 'reservation_charge',
+          data: { reservationId: existing.id, communityId: req.params.communityId, screen: 'payments' },
+        }).catch(() => {})
+
+        // Email with charge details
+        if (resident?.email) {
+          sendEmail({
+            to: resident.email,
+            subject: `Reservación aprobada con cargo — ${areaName}`,
+            html: reservationChargeEmail(
+              residentName,
+              areaName,
+              existing.startTime,
+              existing.endTime,
+              extraCharge,
+              community?.currency ?? 'MXN',
+              chargeNote,
+            ),
+          }).catch(() => {})
+        }
+      } else {
+        // Simple confirmation — no charge
+        sendPushNotification(fastify.prisma, {
+          userIds: [existing.userId],
+          title: '✅ Reservación confirmada',
+          body: `Tu reservación de ${areaName} fue aprobada.`,
+          type: 'reservation_confirmed',
+          data: { reservationId: existing.id, communityId: req.params.communityId },
+        }).catch(() => {})
+
+        if (resident?.email) {
+          sendEmail({
+            to: resident.email,
+            subject: `Reservación confirmada — ${areaName}`,
+            html: reservationApprovedEmail(residentName, areaName, existing.startTime, existing.endTime),
+          }).catch(() => {})
         }
       }
 

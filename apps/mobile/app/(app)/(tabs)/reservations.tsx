@@ -105,12 +105,20 @@ export default function ReservationsScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-6 pt-2 pb-4">
         <Text className="text-white text-2xl font-bold">Reservaciones</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/reservation/new')}
-          className="bg-primary-500 w-10 h-10 rounded-full items-center justify-center"
-        >
-          <Ionicons name="add" size={22} color="white" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/reservations-calendar' as any)}
+            className="bg-surface-card border border-surface-border w-10 h-10 rounded-full items-center justify-center"
+          >
+            <Ionicons name="calendar-outline" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push('/(app)/reservation/new')}
+            className="bg-primary-500 w-10 h-10 rounded-full items-center justify-center"
+          >
+            <Ionicons name="add" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Toggle upcoming/past */}

@@ -169,6 +169,67 @@ export function newReservationEmail(
   `)
 }
 
+export function reservationApprovedEmail(
+  residentName: string,
+  areaName: string,
+  startTime: Date | string,
+  endTime: Date | string,
+): string {
+  const start = new Date(startTime)
+  const end   = new Date(endTime)
+  const dateStr = start.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const timeStr = `${start.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} – ${end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`
+
+  return emailWrapper(`
+    <h2 style="color: #0F172A; margin: 0 0 4px;">¡Reservación confirmada!</h2>
+    <p style="color: #64748B; font-size: 14px; margin: 0 0 24px;">Hola ${residentName}, tu reservación fue aprobada.</p>
+
+    <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin-bottom: 24px; border-left: 4px solid #10B981;">
+      <p style="margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1E293B;">${areaName}</p>
+      <p style="margin: 0; color: #475569; font-size: 14px; text-transform: capitalize;">${dateStr}</p>
+      <p style="margin: 4px 0 0; color: #475569; font-size: 14px;">${timeStr}</p>
+    </div>
+
+    <p style="color: #94A3B8; font-size: 13px;">Recuerda llegar a tiempo. Si necesitas cancelar, hazlo desde la app con anticipación.</p>
+  `)
+}
+
+export function reservationChargeEmail(
+  residentName: string,
+  areaName: string,
+  startTime: Date | string,
+  endTime: Date | string,
+  chargeAmount: number,
+  currency: string,
+  chargeNote?: string | null,
+): string {
+  const start = new Date(startTime)
+  const end   = new Date(endTime)
+  const dateStr = start.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const timeStr = `${start.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} – ${end.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`
+  const chargeStr = `$${chargeAmount.toLocaleString('es-MX')} ${currency}`
+
+  return emailWrapper(`
+    <h2 style="color: #0F172A; margin: 0 0 4px;">Reservación aprobada con cargo adicional</h2>
+    <p style="color: #64748B; font-size: 14px; margin: 0 0 24px;">Hola ${residentName}, tu reservación fue aprobada pero tiene un cargo pendiente de pago.</p>
+
+    <div style="background: #f0fdf4; border-radius: 12px; padding: 20px; margin-bottom: 16px; border-left: 4px solid #10B981;">
+      <p style="margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1E293B;">${areaName}</p>
+      <p style="margin: 0; color: #475569; font-size: 14px; text-transform: capitalize;">${dateStr}</p>
+      <p style="margin: 4px 0 0; color: #475569; font-size: 14px;">${timeStr}</p>
+    </div>
+
+    <div style="background: #fff7ed; border-radius: 12px; padding: 20px; margin-bottom: 24px; border-left: 4px solid #F97316;">
+      <p style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #9A3412; text-transform: uppercase; letter-spacing: 0.5px;">Cargo pendiente de pago</p>
+      <p style="margin: 0; font-size: 24px; font-weight: 800; color: #F97316;">${chargeStr}</p>
+      ${chargeNote ? `<p style="margin: 6px 0 0; color: #92400E; font-size: 13px;">${chargeNote}</p>` : ''}
+    </div>
+
+    <p style="color: #475569; font-size: 14px; margin-bottom: 8px;">Para completar tu reservación, realiza el pago desde la sección <strong>Pagos</strong> en la app antes de la fecha de uso del área.</p>
+    <p style="color: #94A3B8; font-size: 13px;">Si no realizas el pago a tiempo, la reservación puede ser cancelada.</p>
+  `)
+}
+
 export function verifyEmailTemplate(firstName: string, verifyUrl: string): string {
   return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">

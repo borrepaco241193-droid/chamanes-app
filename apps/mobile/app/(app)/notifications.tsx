@@ -21,6 +21,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
   payment_due:           { icon: 'card',             color: '#F59E0B', label: 'Pago' },
   payment_confirmed:     { icon: 'checkmark-circle', color: '#10B981', label: 'Pago confirmado' },
   reservation_confirmed: { icon: 'calendar-check',  color: '#3B82F6', label: 'Reservación' },
+  reservation_charge:    { icon: 'alert-circle',     color: '#F97316', label: 'Cargo de reservación' },
   work_order:            { icon: 'construct',        color: '#8B5CF6', label: 'Tarea' },
   announcement:          { icon: 'megaphone',        color: '#F97316', label: 'Anuncio' },
 }
@@ -145,6 +146,9 @@ export default function NotificationsScreen() {
         break
       case 'reservation_confirmed':
         router.replace('/(app)/(tabs)/reservations')
+        break
+      case 'reservation_charge':
+        router.replace('/(app)/(tabs)/payments')
         break
       case 'work_order':
         router.replace('/(app)/(tabs)/workorders')
