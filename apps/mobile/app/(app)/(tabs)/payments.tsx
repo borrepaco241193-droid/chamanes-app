@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { usePayments, useCheckout } from '../../../src/hooks/usePayments'
+import { usePayments, useCheckout, useGenerateFees } from '../../../src/hooks/usePayments'
 import { useMarkPaid, useUploadTransferProof } from '../../../src/hooks/useResidents'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import * as ImagePicker from 'expo-image-picker'
@@ -33,6 +33,10 @@ const FILTERS: { label: string; value?: PaymentStatus }[] = [
 ]
 
 function PaymentCard({ payment, onPay, onMarkPaid, isAdmin }: { payment: Payment; onPay: (id: string) => void; onMarkPaid?: (id: string) => void; isAdmin?: boolean }) {
+  // Show resident name for admin view
+  const residentName = isAdmin && payment.user
+    ? `${payment.user.firstName} ${payment.user.lastName}`
+    : null
   const cfg = STATUS_CONFIG[payment.status] ?? STATUS_CONFIG.PENDING
   const isDue = payment.dueDate && isPast(new Date(payment.dueDate)) && payment.status === 'PENDING'
   const daysUntilDue = payment.dueDate
@@ -47,6 +51,9 @@ function PaymentCard({ payment, onPay, onMarkPaid, isAdmin }: { payment: Payment
       <View className="flex-row items-start justify-between mb-3">
         <View className="flex-1">
           <Text className="text-white font-semibold text-base">{payment.description}</Text>
+          {residentName && (
+            <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 1 }}>{residentName}</Text>
+          )}
           {payment.unit && (
             <Text className="text-surface-muted text-xs mt-0.5">
               Unidad {payment.unit.block ? `${payment.unit.block}-` : ''}{payment.unit.number}
@@ -126,10 +133,13 @@ export default function PaymentsScreen() {
   const { mutateAsync: getCheckout } = useCheckout()
   const { mutateAsync: markPaid } = useMarkPaid()
   const { mutateAsync: uploadProof } = useUploadTransferProof()
+  const { mutateAsync: generateFees, isPending: isGenerating } = useGenerateFees()
   const [payingId, setPayingId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
   const isAdmin = (
     user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'COMMUNITY_ADMIN' ||
+    user?.role === 'MANAGER' ||
     user?.communityRole === 'SUPER_ADMIN' ||
     user?.communityRole === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'MANAGER'
@@ -232,6 +242,29 @@ export default function PaymentsScreen() {
     }
   }
 
+  async function handleGenerateFees() {
+    const now = new Date()
+    Alert.alert(
+      'Generar cuotas del mes',
+      `¿Generar cuotas de mantenimiento para ${now.toLocaleString('es-MX', { month: 'long', year: 'numeric' })}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Generar',
+          onPress: async () => {
+            try {
+              const result = await generateFees({ month: now.getMonth() + 1, year: now.getFullYear() })
+              refetch()
+              Alert.alert('Listo', `Se generaron ${result.created ?? 0} cuotas nuevas.`)
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message ?? 'No se pudieron generar las cuotas')
+            }
+          },
+        },
+      ],
+    )
+  }
+
   // Summary stats
   const pending = data?.payments?.filter((p) => p.status === 'PENDING') ?? []
   const totalPending = pending.reduce((sum, p) => sum + Number(p.amount), 0)
@@ -239,8 +272,26 @@ export default function PaymentsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Header */}
-      <View className="px-6 pt-2 pb-4">
-        <Text className="text-white text-2xl font-bold">Pagos</Text>
+      <View className="px-6 pt-2 pb-4 flex-row items-center justify-between">
+        <View>
+          <Text className="text-white text-2xl font-bold">Pagos</Text>
+          {isAdmin && (
+            <Text className="text-surface-muted text-xs mt-0.5">
+              {data?.total ?? 0} registros · vista administrador
+            </Text>
+          )}
+        </View>
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={handleGenerateFees}
+            disabled={isGenerating}
+            style={{ backgroundColor: '#10B98120', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#10B98140' }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="add-circle-outline" size={16} color="#10B981" />
+            <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Generar cuotas</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Balance card */}

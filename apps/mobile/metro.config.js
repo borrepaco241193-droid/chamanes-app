@@ -16,11 +16,14 @@ config.resolver.nodeModulesPaths = [
   path.resolve(monorepoRoot, 'node_modules'),
 ]
 
-// Force these packages to always resolve from the mobile app
-// to avoid duplicate React/React Native instances
+// Force these packages to always resolve from a known location
+// react/react-native must come from mobile to avoid duplicates
+// expo-file-system/expo-sharing live in monorepo root node_modules
 config.resolver.extraNodeModules = {
   'react': path.resolve(projectRoot, 'node_modules/react'),
   'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
+  'expo-file-system': path.resolve(monorepoRoot, 'node_modules/expo-file-system'),
+  'expo-sharing': path.resolve(monorepoRoot, 'node_modules/expo-sharing'),
 }
 
 module.exports = withNativeWind(config, { input: './global.css' })
