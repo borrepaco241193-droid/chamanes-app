@@ -321,6 +321,8 @@ export default function CommunitiesScreen() {
   const user = useAuthStore((s) => s.user)
   const setCommunity = useAuthStore((s) => s.setCommunity)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  // True when arriving here because no community is selected yet (first access)
+  const isFirstSelect = isSuperAdmin && !user?.communityId
 
   const [showNew, setShowNew] = useState(false)
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
@@ -339,6 +341,12 @@ export default function CommunitiesScreen() {
   }
 
   function handleSelect(community: Community) {
+    if (isFirstSelect) {
+      // First login — select immediately without confirmation
+      setCommunity(community.id, 'COMMUNITY_ADMIN')
+      router.replace('/(app)/(tabs)/')
+      return
+    }
     Alert.alert(
       'Cambiar comunidad',
       `¿Trabajar en "${community.name}"?`,
@@ -348,7 +356,6 @@ export default function CommunitiesScreen() {
           text: 'Seleccionar',
           onPress: () => {
             setCommunity(community.id, 'COMMUNITY_ADMIN')
-            Alert.alert('Comunidad activa', `Ahora estás gestionando: ${community.name}`)
             router.back()
           },
         },
@@ -360,9 +367,11 @@ export default function CommunitiesScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
       {/* Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16, gap: 12 }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="arrow-back" size={20} color="white" />
-        </TouchableOpacity>
+        {!isFirstSelect && (
+          <TouchableOpacity onPress={() => router.back()} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="arrow-back" size={20} color="white" />
+          </TouchableOpacity>
+        )}
         <View style={{ flex: 1 }}>
           <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold' }}>Comunidades</Text>
           <Text style={{ color: '#64748B', fontSize: 12 }}>{communities.length} registradas</Text>
@@ -375,10 +384,12 @@ export default function CommunitiesScreen() {
       </View>
 
       {/* Info banner */}
-      <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#1E293B', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#334155' }}>
-        <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
+      <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: isFirstSelect ? '#1E3A5F' : '#1E293B', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: isFirstSelect ? '#3B82F6' : '#334155' }}>
+        <Ionicons name={isFirstSelect ? 'business-outline' : 'information-circle-outline'} size={18} color="#3B82F6" />
         <Text style={{ color: '#94A3B8', fontSize: 12, flex: 1 }}>
-          Toca una comunidad para activarla. Usa "Gestionar administradores" para asignar managers y admins a cada cluster.
+          {isFirstSelect
+            ? 'Selecciona el complejo que vas a gestionar para continuar.'
+            : 'Toca una comunidad para activarla. Usa "Gestionar administradores" para asignar managers y admins.'}
         </Text>
       </View>
 

@@ -2,10 +2,16 @@ import { Redirect, Stack } from 'expo-router'
 import { useAuthStore } from '../../src/stores/auth.store'
 
 export default function AppLayout() {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />
+  }
+
+  // SUPER_ADMIN must select a community before accessing the app
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  if (isSuperAdmin && !user?.communityId) {
+    return <Redirect href="/(app)/communities" />
   }
 
   return (

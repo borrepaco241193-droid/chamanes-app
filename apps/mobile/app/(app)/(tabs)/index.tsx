@@ -357,28 +357,39 @@ export default function DashboardScreen() {
         </View>
 
         {/* Community card */}
-        <View style={{
-          backgroundColor: '#1E293B',
-          borderRadius: 20,
-          padding: 18,
-          marginBottom: 24,
-          borderWidth: 1,
-          borderColor: '#334155',
-        }}>
+        <TouchableOpacity
+          activeOpacity={user?.role === 'SUPER_ADMIN' ? 0.75 : 1}
+          onPress={user?.role === 'SUPER_ADMIN' ? () => router.push('/(app)/communities') : undefined}
+          style={{
+            backgroundColor: '#1E293B',
+            borderRadius: 20,
+            padding: 18,
+            marginBottom: 24,
+            borderWidth: 1,
+            borderColor: '#334155',
+          }}
+        >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: '#64748B', fontSize: 11, fontWeight: '600', letterSpacing: 1 }}>COMUNIDAD ACTIVA</Text>
-              <Text style={{ color: 'white', fontSize: 17, fontWeight: '600', marginTop: 4 }}>Residencial Chamanes</Text>
+              <Text style={{ color: 'white', fontSize: 17, fontWeight: '600', marginTop: 4 }}>
+                {meData?.communityName ?? 'Residencial Chamanes'}
+              </Text>
             </View>
-            <View style={{ backgroundColor: '#3B82F615', borderColor: '#3B82F6', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '600' }}>{ROLE_LABEL[role] ?? role}</Text>
+            <View style={{ alignItems: 'flex-end', gap: 6 }}>
+              <View style={{ backgroundColor: '#3B82F615', borderColor: '#3B82F6', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '600' }}>{ROLE_LABEL[role] ?? role}</Text>
+              </View>
+              {user?.role === 'SUPER_ADMIN' && (
+                <Text style={{ color: '#475569', fontSize: 11 }}>Toca para cambiar →</Text>
+              )}
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 6 }}>
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E' }} />
             <Text style={{ color: '#22C55E', fontSize: 13 }}>Sistema operativo</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* ── Gate Buttons (residents & admins) ── */}
         {isResident && communityId ? (
