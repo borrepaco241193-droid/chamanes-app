@@ -1,3 +1,4 @@
+import React from 'react'
 import {
   View,
   Text,
@@ -5,11 +6,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useNotifications, useMarkAllRead, useMarkNotificationRead } from '../../src/hooks/useNotifications'
+import { notificationService } from '../../src/services/notification.service'
 import type { AppNotification } from '../../src/services/notification.service'
 
 // ── Type config ───────────────────────────────────────────────
@@ -109,6 +112,20 @@ export default function NotificationsScreen() {
   const { data, isLoading, isFetching, refetch } = useNotifications()
   const { mutate: markRead } = useMarkNotificationRead()
   const { mutate: markAllRead, isPending: markingAll } = useMarkAllRead()
+  const [seeding, setSeeding] = React.useState(false)
+
+  async function handleSeedDemo() {
+    setSeeding(true)
+    try {
+      const result = await notificationService.seedDemo()
+      await refetch()
+      Alert.alert('Listo', `${result.created} notificaciones de prueba creadas`)
+    } catch {
+      Alert.alert('Error', 'No se pudieron crear las notificaciones de prueba')
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   const notifications = data?.notifications ?? []
   const unreadCount = data?.unreadCount ?? 0
@@ -210,6 +227,23 @@ export default function NotificationsScreen() {
               <Text style={{ color: '#475569', fontSize: 13, textAlign: 'center' }}>
                 Aquí aparecerán visitas, pagos y más
               </Text>
+              <TouchableOpacity
+                onPress={handleSeedDemo}
+                disabled={seeding}
+                style={{
+                  marginTop: 8,
+                  backgroundColor: '#1E293B',
+                  borderRadius: 12,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderWidth: 1,
+                  borderColor: '#334155',
+                }}
+              >
+                <Text style={{ color: '#3B82F6', fontSize: 13, fontWeight: '600' }}>
+                  {seeding ? 'Creando...' : 'Generar notificaciones de prueba'}
+                </Text>
+              </TouchableOpacity>
             </View>
           ) : (
             notifications.map((n) => (

@@ -42,4 +42,9 @@ export const notificationService = {
   markAllRead: async (): Promise<void> => {
     await api.patch('/notifications/read-all')
   },
+
+  seedDemo: async (): Promise<{ created: number }> => {
+    const { data } = await api.post<{ data: { created: number } }>('/notifications/seed-demo')
+    return data.data
+  },
 }
