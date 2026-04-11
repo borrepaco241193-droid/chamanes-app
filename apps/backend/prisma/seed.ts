@@ -357,6 +357,7 @@ async function main() {
         maxUses:      i < 4 ? 1 : 5,
         usedCount:    i < 6 ? 1 : 0,
         status:       i < 6 ? VisitorPassStatus.USED : VisitorPassStatus.ACTIVE,
+        qrCode:       `SEED-PASS-${COMMUNITY_ID}-${i}-${Date.now()}`,
       },
     })
 
