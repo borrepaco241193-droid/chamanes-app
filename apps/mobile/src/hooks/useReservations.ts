@@ -40,8 +40,9 @@ export function useApproveReservation() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
-      reservationService.approve(communityId, id, approve),
+    mutationFn: ({ id, approve, extraCharge, chargeNote }: {
+      id: string; approve: boolean; extraCharge?: number; chargeNote?: string
+    }) => reservationService.approve(communityId, id, approve, extraCharge, chargeNote),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservations', communityId] })
       queryClient.invalidateQueries({ queryKey: ['admin-stats', communityId] })

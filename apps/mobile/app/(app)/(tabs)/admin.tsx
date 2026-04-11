@@ -520,6 +520,36 @@ export default function AdminScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Reservaciones directas */}
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/reservations-admin' as any)}
+              style={{
+                backgroundColor: '#1E293B', borderRadius: 16, padding: 16,
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                borderWidth: 1,
+                borderColor: (stats?.reservations.pending ?? 0) > 0 ? '#F59E0B40' : '#334155',
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#10B98120', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="calendar-outline" size={20} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>Aprobar reservaciones</Text>
+                <Text style={{ color: (stats?.reservations.pending ?? 0) > 0 ? '#F59E0B' : '#64748B', fontSize: 12, marginTop: 2 }}>
+                  {(stats?.reservations.pending ?? 0) > 0
+                    ? `${stats?.reservations.pending} por aprobar`
+                    : 'Ver y gestionar todas'}
+                </Text>
+              </View>
+              {(stats?.reservations.pending ?? 0) > 0 && (
+                <View style={{ backgroundColor: '#F59E0B20', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#F59E0B40' }}>
+                  <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 13 }}>{stats?.reservations.pending}</Text>
+                </View>
+              )}
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => router.push('/(app)/reports' as any)}
               className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"

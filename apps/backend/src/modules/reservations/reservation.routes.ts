@@ -7,7 +7,6 @@ import {
   createReservation,
   listReservations,
   cancelReservation,
-  approveReservation,
 } from './reservation.service.js'
 
 // ============================================================
@@ -135,10 +134,10 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Admin: approve or reject reservation ─────────────────
+  // ── Admin: approve (with optional extra charge) or reject ─
   fastify.patch<{
     Params: { communityId: string; reservationId: string }
-    Body: { approve: boolean }
+    Body: { approve: boolean; extraCharge?: number; chargeNote?: string }
   }>(
     '/:communityId/reservations/:reservationId/approve',
     {
@@ -148,21 +147,72 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
       ],
     },
     async (req, reply) => {
-      const { approve } = req.body as { approve: boolean }
-      if (approve === false) {
-        // Reject = cancel with admin reason
+      const { approve, extraCharge, chargeNote } = req.body as {
+        approve: boolean; extraCharge?: number; chargeNote?: string
+      }
+
+      if (!approve) {
         const reservation = await fastify.prisma.reservation.update({
           where: { id: req.params.reservationId, communityId: req.params.communityId },
           data: { status: 'CANCELLED' },
         })
         return reply.send(reservation)
       }
-      const reservation = await approveReservation(
-        fastify.prisma,
-        req.params.communityId,
-        req.params.reservationId,
-        req.user.sub,
-      )
+
+      // Approve — update status and optionally add extra charge to feeAmount
+      const existing = await fastify.prisma.reservation.findFirst({
+        where: { id: req.params.reservationId, communityId: req.params.communityId },
+      })
+      if (!existing) {
+        return reply.code(404).send({ error: 'Reservation not found' })
+      }
+
+      const newFeeAmount = extraCharge
+        ? Number(existing.feeAmount ?? 0) + extraCharge
+        : existing.feeAmount
+
+      const reservation = await fastify.prisma.reservation.update({
+        where: { id: req.params.reservationId },
+        data: {
+          status:    'CONFIRMED',
+          feeAmount: newFeeAmount,
+          ...(chargeNote ? { notes: existing.notes ? `${existing.notes} | Cargo: ${chargeNote}` : `Cargo extra: ${chargeNote}` } : {}),
+        },
+      })
+
+      // If extra charge was added, create a payment record for the resident
+      if (extraCharge && extraCharge > 0) {
+        const [community, unitResident] = await Promise.all([
+          fastify.prisma.community.findUnique({
+            where: { id: req.params.communityId },
+            select: { currency: true },
+          }),
+          fastify.prisma.communityUser.findFirst({
+            where: { userId: existing.userId, communityId: req.params.communityId },
+            include: { unitResidents: { where: { isPrimary: true }, select: { unitId: true }, take: 1 } },
+          }),
+        ])
+
+        const unitId = unitResident?.unitResidents[0]?.unitId
+        if (unitId) {
+          await fastify.prisma.payment.create({
+            data: {
+              communityId: req.params.communityId,
+              userId:      existing.userId,
+              unitId,
+              amount:      extraCharge,
+              currency:    community?.currency ?? 'MXN',
+              type:        'OTHER' as any,
+              description: chargeNote
+                ? `Cargo por reservación: ${chargeNote}`
+                : 'Cargo extra por reservación de área común',
+              status:  'PENDING',
+              dueDate: existing.startTime,
+            },
+          })
+        }
+      }
+
       return reply.send(reservation)
     },
   )

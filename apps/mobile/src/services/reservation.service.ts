@@ -84,10 +84,16 @@ export const reservationService = {
     return res.data
   },
 
-  async approve(communityId: string, reservationId: string, approve: boolean): Promise<Reservation> {
+  async approve(
+    communityId: string,
+    reservationId: string,
+    approve: boolean,
+    extraCharge?: number,
+    chargeNote?: string,
+  ): Promise<Reservation> {
     const res = await api.patch(
       `/communities/${communityId}/reservations/${reservationId}/approve`,
-      { approve },
+      { approve, extraCharge, chargeNote },
     )
     return res.data
   },
