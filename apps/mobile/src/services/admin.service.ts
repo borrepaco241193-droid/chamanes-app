@@ -55,6 +55,11 @@ export const adminService = {
     return res.data
   },
 
+  async getArrears(communityId: string): Promise<{ arrears: UnitArrear[]; total: number }> {
+    const res = await api.get(`/communities/${communityId}/admin/arrears`)
+    return res.data
+  },
+
   async getAccessEvents(
     communityId: string,
     params?: { page?: number; limit?: number; type?: string; from?: string; to?: string },
@@ -67,6 +72,19 @@ export const adminService = {
       pages: number
     }
   },
+}
+
+export interface UnitArrear {
+  unitId: string
+  unitNumber: string
+  block: string | null
+  floor: number | null
+  resident: { firstName: string; lastName: string; email: string; phone: string | null } | null
+  totalDebt: number
+  pendingCount: number
+  monthsOverdue: number
+  oldestDueDate: string
+  payments: { id: string; amount: number; description: string; dueDate: string; periodMonth: number | null; periodYear: number | null }[]
 }
 
 export interface AccessEvent {

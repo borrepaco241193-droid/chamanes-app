@@ -11,6 +11,7 @@ import {
 } from '@expo-google-fonts/inter'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { usePushNotifications } from '../src/hooks/usePushNotifications'
+import { TermsModal } from '../src/components/TermsModal'
 import '../global.css'
 
 // Keep splash screen visible while fonts load
@@ -33,11 +34,14 @@ function AppContent() {
   usePushNotifications()
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(app)" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
+      </Stack>
+      <TermsModal />
+    </>
   )
 }
 

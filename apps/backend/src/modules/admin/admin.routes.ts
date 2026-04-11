@@ -57,6 +57,78 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // GET /communities/:id/admin/arrears — units with outstanding balances
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/admin/arrears',
+    { preHandler: adminOnly },
+    async (req, reply) => {
+      const now = new Date()
+
+      // All PENDING payments for this community, grouped by unit
+      const pending = await fastify.prisma.payment.findMany({
+        where: { communityId: req.params.communityId, status: 'PENDING' },
+        include: {
+          unit:  { select: { id: true, number: true, block: true, floor: true } },
+          user:  { select: { firstName: true, lastName: true, email: true, phone: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+      })
+
+      // Group by unitId
+      const byUnit = new Map<string, {
+        unit: { id: string; number: string; block: string | null; floor: number | null }
+        resident: { firstName: string; lastName: string; email: string; phone: string | null } | null
+        payments: typeof pending
+        totalDebt: number
+        oldestDueDate: Date
+        monthsOverdue: number
+      }>()
+
+      for (const p of pending) {
+        const key = p.unitId
+        if (!byUnit.has(key)) {
+          byUnit.set(key, {
+            unit: p.unit,
+            resident: p.user ? { firstName: p.user.firstName, lastName: p.user.lastName, email: p.user.email, phone: p.user.phone } : null,
+            payments: [],
+            totalDebt: 0,
+            oldestDueDate: p.dueDate ?? now,
+            monthsOverdue: 0,
+          })
+        }
+        const entry = byUnit.get(key)!
+        entry.payments.push(p)
+        entry.totalDebt += Number(p.amount)
+        if (p.dueDate && p.dueDate < entry.oldestDueDate) {
+          entry.oldestDueDate = p.dueDate
+        }
+      }
+
+      // Calculate months overdue from oldest due date
+      const result = Array.from(byUnit.values()).map((e) => {
+        const diffMs = now.getTime() - e.oldestDueDate.getTime()
+        const monthsOverdue = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30)))
+        return {
+          unitId:       e.unit.id,
+          unitNumber:   e.unit.number,
+          block:        e.unit.block,
+          floor:        e.unit.floor,
+          resident:     e.resident,
+          totalDebt:    e.totalDebt,
+          pendingCount: e.payments.length,
+          monthsOverdue,
+          oldestDueDate: e.oldestDueDate,
+          payments: e.payments.map((p) => ({
+            id: p.id, amount: Number(p.amount), description: p.description,
+            dueDate: p.dueDate, periodMonth: p.periodMonth, periodYear: p.periodYear,
+          })),
+        }
+      }).sort((a, b) => b.totalDebt - a.totalDebt)
+
+      return reply.send({ arrears: result, total: result.length })
+    },
+  )
+
   // ── CSV EXPORT ROUTES ─────────────────────────────────────
 
   type CsvParams = { Params: { communityId: string }; Querystring: { from?: string; to?: string } }

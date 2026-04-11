@@ -47,6 +47,16 @@ export function usePendingIdVerifications() {
   })
 }
 
+export function useArrears() {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['arrears', communityId],
+    queryFn: () => adminService.getArrears(communityId),
+    enabled: !!communityId,
+    staleTime: 60_000,
+  })
+}
+
 export function useAccessEvents(params?: { page?: number; type?: string; from?: string; to?: string }) {
   const communityId = useCommunityId()
   return useQuery({

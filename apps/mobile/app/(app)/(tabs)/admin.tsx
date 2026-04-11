@@ -550,6 +550,31 @@ export default function AdminScreen() {
               <Ionicons name="chevron-forward" size={18} color="#475569" />
             </TouchableOpacity>
 
+            {/* Adeudos por unidad */}
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/arrears' as any)}
+              style={{
+                backgroundColor: '#1E293B', borderRadius: 16, padding: 16,
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                borderWidth: 1,
+                borderColor: (stats?.payments.pending ?? 0) > 0 ? '#EF444430' : '#334155',
+              }}
+              activeOpacity={0.75}
+            >
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#EF444420', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>Adeudos por unidad</Text>
+                <Text style={{ color: (stats?.payments.pending ?? 0) > 0 ? '#EF4444' : '#64748B', fontSize: 12, marginTop: 2 }}>
+                  {(stats?.payments.pending ?? 0) > 0
+                    ? `${stats?.payments.pending} cuotas sin pagar`
+                    : 'Ver deudas y morosidad'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => router.push('/(app)/reports' as any)}
               className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"

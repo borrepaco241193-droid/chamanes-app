@@ -68,14 +68,37 @@ export async function registerForPushNotifications(): Promise<string | null> {
     return null
   }
 
-  // Android requires a notification channel
+  // Android requires notification channels — one per urgency level
   if (Platform.OS === 'android') {
+    // Default channel — payments, reservations, announcements
     await Notifications.setNotificationChannelAsync('default', {
       name: 'Chamanes',
-      importance: Notifications.AndroidImportance.MAX,
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#6366F1',
-      sound: null,
+      lightColor: '#3B82F6',
+      sound: 'default',
+    })
+
+    // Visitor alarm channel — high importance + alarm sound
+    await Notifications.setNotificationChannelAsync('visitor_alarm', {
+      name: 'Visitas en puerta',
+      description: 'Alertas cuando llega un visitante a tu unidad',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 400, 200, 400, 200, 400],
+      lightColor: '#22C55E',
+      sound: 'default',
+      bypassDnd: false,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    })
+
+    // Work order urgent channel
+    await Notifications.setNotificationChannelAsync('work_order_urgent', {
+      name: 'Órdenes urgentes',
+      description: 'Órdenes de trabajo con prioridad urgente o alta',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 300, 150, 300],
+      lightColor: '#EF4444',
+      sound: 'default',
     })
   }
 

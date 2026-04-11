@@ -108,12 +108,18 @@ export async function sendPushNotification(
 
   const payload = { type, ...data }
 
+  // Pick Android channel based on notification type
+  const channelId =
+    type === 'visitor_arrived' ? 'visitor_alarm' :
+    type === 'work_order' ? 'work_order_urgent' :
+    'default'
+
   await Promise.allSettled([
     fcmTokens.length > 0 && isFirebaseConfigured()
       ? deliverViaFCM(fcmTokens, title, body, payload)
       : Promise.resolve(),
     expoTokens.length > 0
-      ? deliverViaExpo(expoTokens, title, body, payload)
+      ? deliverViaExpo(expoTokens, title, body, payload, channelId)
       : Promise.resolve(),
   ])
 }
@@ -143,6 +149,7 @@ async function deliverViaExpo(
   title: string,
   body: string,
   data: Record<string, string>,
+  channelId = 'default',
 ): Promise<void> {
   try {
     const messages = tokens.map((to) => ({
@@ -151,6 +158,8 @@ async function deliverViaExpo(
       body,
       data,
       sound: 'default',
+      channelId,
+      priority: channelId === 'visitor_alarm' ? 'high' : 'default',
     }))
 
     await fetch('https://exp.host/--/api/v2/push/send', {

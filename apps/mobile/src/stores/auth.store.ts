@@ -26,12 +26,14 @@ interface AuthState {
   tokens: AuthTokens | null
   isAuthenticated: boolean
   isHydrated: boolean
+  hasAcceptedTerms: boolean
 
   // Actions
   setAuth: (user: AuthUser, tokens: AuthTokens) => void
   setUser: (user: AuthUser) => void
   /** Switch active community without re-login (for SUPER_ADMIN managing multiple communities) */
   setCommunity: (communityId: string, communityRole?: AuthUser['communityRole']) => void
+  acceptTerms: () => void
   logout: () => void
   setHydrated: () => void
 }
@@ -43,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
       tokens: null,
       isAuthenticated: false,
       isHydrated: false,
+      hasAcceptedTerms: false,
 
       setAuth: (user, tokens) =>
         set({ user, tokens, isAuthenticated: true }),
@@ -56,6 +59,8 @@ export const useAuthStore = create<AuthState>()(
             ? { ...state.user, communityId, communityRole: communityRole ?? state.user.communityRole }
             : state.user,
         })),
+
+      acceptTerms: () => set({ hasAcceptedTerms: true }),
 
       logout: () =>
         set({ user: null, tokens: null, isAuthenticated: false }),
@@ -74,6 +79,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         tokens: state.tokens,
         isAuthenticated: state.isAuthenticated,
+        hasAcceptedTerms: state.hasAcceptedTerms,
       }),
     },
   ),
