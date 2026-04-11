@@ -1,6 +1,7 @@
 # ============================================================
 # Chamanes Backend — Production Dockerfile
 # Multi-stage build: keeps final image lean and secure
+# Cache-bust: 2026-04-10
 # ============================================================
 
 # Stage 1: Build (includes all deps + compiled output)
