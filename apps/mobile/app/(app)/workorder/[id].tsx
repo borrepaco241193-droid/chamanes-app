@@ -8,16 +8,25 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useWorkOrder, useUpdateWorkOrderStatus, useAddComment } from '../../../src/hooks/useWorkOrders'
+import {
+  useWorkOrder,
+  useUpdateWorkOrderStatus,
+  useAddComment,
+  useStaffList,
+  useAssignWorkOrder,
+} from '../../../src/hooks/useWorkOrders'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { WorkOrderStatus } from '../../../src/services/workorder.service'
+import type { StaffMember } from '../../../src/services/staff.service'
 
 // ── Config ────────────────────────────────────────────────────
 
@@ -81,14 +90,33 @@ export default function WorkOrderDetailScreen() {
   const { data: order, isLoading } = useWorkOrder(id)
   const { mutateAsync: updateStatus, isPending: isUpdating } = useUpdateWorkOrderStatus()
   const { mutateAsync: addComment, isPending: isCommenting } = useAddComment()
+  const { mutateAsync: assignOrder, isPending: isAssigning } = useAssignWorkOrder()
+  const { data: staffList } = useStaffList()
   const user = useAuthStore((s) => s.user)
 
   const [commentText, setCommentText] = useState('')
+  const [showAssignModal, setShowAssignModal] = useState(false)
 
-  const isAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'SUPER_ADMIN' ||
-    user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'SUPER_ADMIN'
+  const isAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER' ||
+    user?.communityRole === 'SUPER_ADMIN'
   const isStaff = user?.communityRole === 'STAFF'
   const canUpdateStatus = isAdmin || isStaff
+
+  async function handleAssign(staff: StaffMember) {
+    setShowAssignModal(false)
+    try {
+      await assignOrder({ orderId: id, staffId: staff.id })
+      Alert.alert(
+        'Asignado',
+        `Orden asignada a ${(staff as any).user?.firstName ?? 'personal'}. Se le envió una notificación.`,
+      )
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo asignar la orden.')
+    }
+  }
 
   async function handleStatusChange(newStatus: WorkOrderStatus) {
     const labels: Record<string, string> = {
@@ -231,10 +259,35 @@ export default function WorkOrderDetailScreen() {
               <InfoRow
                 icon="person-outline"
                 label="Asignada a"
-                value={`${order.assignments.length} personal`}
+                value={order.assignments.map((a: any) =>
+                  a.staff?.user ? `${a.staff.user.firstName} ${a.staff.user.lastName}` : a.staff?.position ?? 'Personal'
+                ).join(', ')}
               />
             )}
           </View>
+
+          {/* Assign section — admin/manager only */}
+          {isAdmin && isActive && (
+            <View className="mx-6 mb-4">
+              <Text className="text-surface-muted text-xs font-medium uppercase tracking-wider mb-2">
+                Asignación
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowAssignModal(true)}
+                disabled={isAssigning}
+                className="flex-row items-center gap-2 bg-violet-500/20 border border-violet-500/40 px-4 py-3 rounded-xl"
+                activeOpacity={0.75}
+              >
+                <Ionicons name="person-add-outline" size={18} color="#8B5CF6" />
+                <Text className="text-violet-400 font-medium text-sm flex-1">
+                  {order.assignments && order.assignments.length > 0
+                    ? 'Reasignar a otro técnico'
+                    : 'Asignar a técnico / personal'}
+                </Text>
+                {isAssigning && <ActivityIndicator size="small" color="#8B5CF6" />}
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Status actions */}
           {canUpdateStatus && isActive && (
@@ -310,6 +363,90 @@ export default function WorkOrderDetailScreen() {
 
           <View className="h-4" />
         </ScrollView>
+
+        {/* Assign Modal */}
+        <Modal
+          visible={showAssignModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowAssignModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: '#1E293B', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%' }}>
+              {/* Modal header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', flex: 1 }}>
+                  Seleccionar personal
+                </Text>
+                <TouchableOpacity onPress={() => setShowAssignModal(false)}>
+                  <Ionicons name="close" size={24} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {!staffList || staffList.length === 0 ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <Ionicons name="people-outline" size={40} color="#334155" />
+                  <Text style={{ color: '#64748B', marginTop: 12 }}>No hay personal registrado</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={staffList}
+                  keyExtractor={(s) => s.id}
+                  contentContainerStyle={{ padding: 16 }}
+                  renderItem={({ item: s }) => {
+                    const name = (s as any).user
+                      ? `${(s as any).user.firstName} ${(s as any).user.lastName}`
+                      : s.position
+                    const isOnShift = s.checkIns && s.checkIns.length > 0
+                    const isCurrentlyAssigned = order?.assignments?.some((a: any) => a.staffId === s.id)
+                    return (
+                      <TouchableOpacity
+                        onPress={() => handleAssign(s)}
+                        activeOpacity={0.75}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: isCurrentlyAssigned ? '#1E3A5F' : '#0F172A',
+                          borderRadius: 14,
+                          padding: 14,
+                          marginBottom: 8,
+                          borderWidth: 1,
+                          borderColor: isCurrentlyAssigned ? '#3B82F6' : '#334155',
+                          gap: 12,
+                        }}
+                      >
+                        <View style={{
+                          width: 42, height: 42, borderRadius: 21,
+                          backgroundColor: '#334155',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>
+                            {name[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: 'white', fontWeight: '600', fontSize: 15 }}>{name}</Text>
+                          <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{s.position}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          {isOnShift && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
+                              <Text style={{ color: '#22C55E', fontSize: 11 }}>En turno</Text>
+                            </View>
+                          )}
+                          {isCurrentlyAssigned && (
+                            <Text style={{ color: '#3B82F6', fontSize: 11 }}>Asignado</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  }}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
 
         {/* Add comment input */}
         <View className="px-6 pb-6 pt-3 border-t border-surface-border flex-row items-end gap-3">

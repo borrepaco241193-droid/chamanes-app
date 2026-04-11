@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderService, type WorkOrderStatus } from '../services/workorder.service'
+import { staffService } from '../services/staff.service'
 import { useAuthStore } from '../stores/auth.store'
 
 function useCommunityId() {
@@ -48,6 +49,29 @@ export function useUpdateWorkOrderStatus() {
   return useMutation({
     mutationFn: ({ orderId, status }: { orderId: string; status: WorkOrderStatus }) =>
       workOrderService.updateStatus(communityId, orderId, status),
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
+    },
+  })
+}
+
+export function useStaffList() {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['staff-list', communityId],
+    queryFn: () => staffService.listStaff(communityId),
+    enabled: !!communityId,
+    staleTime: 60_000,
+  })
+}
+
+export function useAssignWorkOrder() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, staffId, notes }: { orderId: string; staffId: string; notes?: string }) =>
+      workOrderService.assign(communityId, orderId, staffId, notes),
     onSuccess: (_, { orderId }) => {
       queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
       queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })

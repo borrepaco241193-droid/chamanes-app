@@ -9,6 +9,7 @@ export async function listStaff(prisma: PrismaClient, communityId: string) {
   return prisma.staff.findMany({
     where: { communityId, isActive: true },
     include: {
+      user: { select: { firstName: true, lastName: true, avatarUrl: true, pushToken: true } },
       checkIns: {
         where: { checkOutTime: null }, // active shift
         take: 1,

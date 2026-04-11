@@ -68,6 +68,19 @@ export const workOrderService = {
     return res.data
   },
 
+  async assign(
+    communityId: string,
+    orderId: string,
+    staffId: string,
+    notes?: string,
+  ): Promise<WorkOrder> {
+    const res = await api.post(`/communities/${communityId}/work-orders/${orderId}/assign`, {
+      staffId,
+      notes,
+    })
+    return res.data
+  },
+
   async addComment(
     communityId: string,
     orderId: string,

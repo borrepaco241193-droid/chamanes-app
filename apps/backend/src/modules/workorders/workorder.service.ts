@@ -88,7 +88,11 @@ export async function getWorkOrder(
     where: { id: workOrderId, communityId },
     include: {
       assignments: {
-        include: { staff: true },
+        include: {
+          staff: {
+            include: { user: { select: { id: true, firstName: true, lastName: true, avatarUrl: true } } },
+          },
+        },
       },
       comments: { orderBy: { createdAt: 'asc' } },
     },

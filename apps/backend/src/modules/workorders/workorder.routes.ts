@@ -14,6 +14,7 @@ import {
   assignWorkOrder,
   addComment,
 } from './workorder.service.js'
+import { sendPushNotification } from '../notifications/notification.service.js'
 
 const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
   // POST — create
@@ -110,6 +111,24 @@ const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
         req.params.orderId,
         body,
       )
+
+      // Notify the assigned staff member
+      try {
+        const staff = await fastify.prisma.staff.findUnique({
+          where: { id: body.staffId },
+          include: { user: { select: { id: true } } },
+        })
+        if (staff?.user?.id) {
+          await sendPushNotification(fastify.prisma, {
+            userIds: [staff.user.id],
+            title: 'Nueva orden asignada',
+            body: `Se te asignó: ${order.title}${order.location ? ` · ${order.location}` : ''}`,
+            type: 'work_order',
+            data: { workOrderId: order.id, priority: order.priority },
+          })
+        }
+      } catch { /* non-fatal */ }
+
       return reply.send(order)
     },
   )
