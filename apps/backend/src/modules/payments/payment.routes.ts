@@ -26,8 +26,20 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { communityId: string }
     Querystring: { status?: string; page?: string; limit?: string }
   }>('/:communityId/payments', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    // Check role from JWT first, then fall back to DB lookup (handles stale tokens)
+    const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
     const effectiveRole = req.user.communityRole ?? req.user.role
-    const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]).includes(effectiveRole)
+    let isAdmin = ADMIN_ROLES.includes(effectiveRole) || req.user.role === UserRole.SUPER_ADMIN
+
+    // If JWT says RESIDENT but user might actually be admin — verify in DB
+    if (!isAdmin) {
+      const cu = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId: req.user.sub, communityId: req.params.communityId } },
+        select: { role: true },
+      })
+      if (cu && ADMIN_ROLES.includes(cu.role)) isAdmin = true
+    }
+
     const result = await listPayments(
       fastify.prisma,
       req.params.communityId,
@@ -45,8 +57,16 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/payments/:paymentId',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
+      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
       const effectiveRole = req.user.communityRole ?? req.user.role
-      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]).includes(effectiveRole)
+      let isAdmin = ADMIN_ROLES.includes(effectiveRole) || req.user.role === UserRole.SUPER_ADMIN
+      if (!isAdmin) {
+        const cu = await fastify.prisma.communityUser.findUnique({
+          where: { userId_communityId: { userId: req.user.sub, communityId: req.params.communityId } },
+          select: { role: true },
+        })
+        if (cu && ADMIN_ROLES.includes(cu.role)) isAdmin = true
+      }
       const payment = await getPayment(
         fastify.prisma,
         req.params.communityId,
