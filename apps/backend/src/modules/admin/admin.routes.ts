@@ -187,15 +187,15 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { communityId, createdAt: { gte: start, lte: end } },
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { firstName: true, lastName: true, email: true } },
-          accessEvents: { select: { type: true, createdAt: true } },
+          createdBy:    { select: { firstName: true, lastName: true, email: true } },
+          accessEvents: { select: { type: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
         },
       })
 
       const rows = passes.map((p) => ({
         'Fecha creación': p.createdAt.toISOString().slice(0, 10),
-        'Creado por': `${p.user.firstName} ${p.user.lastName}`,
-        'Email anfitrión': p.user.email,
+        'Creado por': `${p.createdBy.firstName} ${p.createdBy.lastName}`,
+        'Email anfitrión': p.createdBy.email,
         'Visitante': p.visitorName,
         'Teléfono visitante': p.visitorPhone ?? '',
         'Placa': p.plateNumber ?? '',
