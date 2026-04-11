@@ -43,6 +43,7 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
           UserRole.RESIDENT,
           UserRole.COMMUNITY_ADMIN,
           UserRole.SUPER_ADMIN,
+          UserRole.MANAGER,
         ),
       ],
     },
@@ -63,9 +64,15 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { communityId: string }
     Querystring: { status?: string; page?: string; limit?: string }
   }>('/:communityId/visitors', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-      req.user.communityRole ?? req.user.role,
-    )
+    const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
+    let isAdmin = ADMIN_ROLES.includes(req.user.communityRole ?? req.user.role) || req.user.role === UserRole.SUPER_ADMIN
+    if (!isAdmin) {
+      const cu = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId: req.user.sub, communityId: req.params.communityId } },
+        select: { role: true },
+      })
+      if (cu && ADMIN_ROLES.includes(cu.role)) isAdmin = true
+    }
 
     const result = await listVisitorPasses(
       fastify.prisma,
@@ -83,9 +90,15 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/visitors/:passId',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-        req.user.communityRole ?? req.user.role,
-      )
+      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
+      let isAdmin = ADMIN_ROLES.includes(req.user.communityRole ?? req.user.role) || req.user.role === UserRole.SUPER_ADMIN
+      if (!isAdmin) {
+        const cu = await fastify.prisma.communityUser.findUnique({
+          where: { userId_communityId: { userId: req.user.sub, communityId: req.params.communityId } },
+          select: { role: true },
+        })
+        if (cu && ADMIN_ROLES.includes(cu.role)) isAdmin = true
+      }
       const pass = await getVisitorPass(
         fastify.prisma,
         req.params.communityId,
@@ -103,9 +116,8 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
       const body = revokePassSchema.parse(req.body ?? {})
-      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN] as string[]).includes(
-        req.user.communityRole ?? req.user.role,
-      )
+      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
+      const isAdmin = ADMIN_ROLES.includes(req.user.communityRole ?? req.user.role) || req.user.role === UserRole.SUPER_ADMIN
       const pass = await revokeVisitorPass(
         fastify.prisma,
         req.params.communityId,
@@ -157,6 +169,7 @@ const visitorRoutes: FastifyPluginAsync = async (fastify) => {
           UserRole.GUARD,
           UserRole.COMMUNITY_ADMIN,
           UserRole.SUPER_ADMIN,
+          UserRole.MANAGER,
         ),
       ],
     },

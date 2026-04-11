@@ -23,10 +23,10 @@ const STATUS_COLORS: Record<VisitorPassStatus, string> = {
 }
 
 const FILTERS: { label: string; value?: VisitorPassStatus }[] = [
-  { label: 'All' },
-  { label: 'Active', value: 'ACTIVE' },
-  { label: 'Used', value: 'USED' },
-  { label: 'Expired', value: 'EXPIRED' },
+  { label: 'Todas' },
+  { label: 'Activas', value: 'ACTIVE' },
+  { label: 'Usadas', value: 'USED' },
+  { label: 'Expiradas', value: 'EXPIRED' },
 ]
 
 function PassCard({ pass }: { pass: VisitorPass }) {
@@ -74,6 +74,11 @@ function PassCard({ pass }: { pass: VisitorPass }) {
 export default function VisitorsScreen() {
   const { user } = useAuthStore()
   const isGuard = user?.communityRole === 'GUARD'
+  const isAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER' ||
+    user?.communityRole === 'SUPER_ADMIN'
   const [filter, setFilter] = useState<VisitorPassStatus | undefined>(undefined)
 
   const { data, isLoading, refetch, isRefetching } = useVisitorPasses(filter)
@@ -82,7 +87,7 @@ export default function VisitorsScreen() {
     <SafeAreaView className="flex-1 bg-surface">
       {/* Header */}
       <View className="flex-row items-center justify-between px-6 pt-2 pb-4">
-        <Text className="text-white text-2xl font-bold">Visitors</Text>
+        <Text className="text-white text-2xl font-bold">Visitas</Text>
         {!isGuard && (
           <TouchableOpacity
             onPress={() => router.push('/(app)/visitor/new')}
@@ -135,13 +140,13 @@ export default function VisitorsScreen() {
           ListEmptyComponent={
             <View className="items-center justify-center py-20">
               <Ionicons name="people-outline" size={48} color="#334155" />
-              <Text className="text-surface-muted mt-3 text-base">No visitor passes yet</Text>
+              <Text className="text-surface-muted mt-3 text-base">No hay pases de visita</Text>
               {!isGuard && (
                 <TouchableOpacity
                   onPress={() => router.push('/(app)/visitor/new')}
                   className="mt-4 bg-primary-500 px-6 py-2.5 rounded-full"
                 >
-                  <Text className="text-white font-medium">Create Pass</Text>
+                  <Text className="text-white font-medium">Crear pase</Text>
                 </TouchableOpacity>
               )}
             </View>

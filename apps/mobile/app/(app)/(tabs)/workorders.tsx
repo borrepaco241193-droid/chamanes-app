@@ -119,8 +119,11 @@ export default function WorkOrdersScreen() {
   const [filter, setFilter] = useState<WorkOrderStatus | undefined>(undefined)
   const { data, isLoading, refetch, isRefetching } = useWorkOrders(filter)
   const user = useAuthStore((s) => s.user)
-  const isAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'SUPER_ADMIN' ||
-    user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'SUPER_ADMIN'
+  const isAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.communityRole === 'COMMUNITY_ADMIN' ||
+    user?.communityRole === 'MANAGER' ||
+    user?.communityRole === 'SUPER_ADMIN'
   const isStaff = user?.communityRole === 'STAFF'
   const canCreate = !isStaff // residents and admins can report issues
 

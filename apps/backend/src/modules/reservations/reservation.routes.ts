@@ -8,6 +8,7 @@ import {
   listReservations,
   cancelReservation,
 } from './reservation.service.js'
+import { sendPushNotification } from '../notifications/notification.service.js'
 
 // ============================================================
 // Reservation Routes
@@ -156,6 +157,16 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
           where: { id: req.params.reservationId, communityId: req.params.communityId },
           data: { status: 'CANCELLED' },
         })
+        // Notify resident of rejection
+        try {
+          await sendPushNotification(fastify.prisma, {
+            userIds: [reservation.userId],
+            title: 'Reservación rechazada',
+            body: 'Tu solicitud de reservación fue rechazada. Contáctanos si tienes dudas.',
+            type: 'reservation_confirmed',
+            data: { reservationId: reservation.id },
+          })
+        } catch { /* non-fatal */ }
         return reply.send(reservation)
       }
 
@@ -179,6 +190,17 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
           ...(chargeNote ? { notes: existing.notes ? `${existing.notes} | Cargo: ${chargeNote}` : `Cargo extra: ${chargeNote}` } : {}),
         },
       })
+
+      // Notify resident of confirmed reservation
+      try {
+        await sendPushNotification(fastify.prisma, {
+          userIds: [existing.userId],
+          title: 'Reservación confirmada',
+          body: `Tu reservación${existing.notes ? ` (${existing.notes.split('|')[0].trim()})` : ''} ha sido aprobada`,
+          type: 'reservation_confirmed',
+          data: { reservationId: existing.id, communityId: req.params.communityId },
+        })
+      } catch { /* non-fatal */ }
 
       // If extra charge was added, create a payment record for the resident
       if (extraCharge && extraCharge > 0) {

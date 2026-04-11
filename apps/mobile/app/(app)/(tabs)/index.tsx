@@ -19,6 +19,7 @@ import { gateService } from '../../../src/services/gate.service'
 import { Ionicons } from '@expo/vector-icons'
 import { useRef, useState, useEffect } from 'react'
 import * as Haptics from 'expo-haptics'
+import { useUnreadCount } from '../../../src/hooks/useNotifications'
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN:     'Super Admin',
@@ -48,7 +49,7 @@ function GateButton({ type, communityId, locked = false }: GateButtonProps) {
   const darkColor = isEntry ? '#15803D' : '#C2410C'
   const icon      = isEntry ? 'enter'   : 'exit'
   const label     = isEntry ? 'Abrir entrada' : 'Abrir salida'
-  const successMsg = isEntry ? '¡Entrada abierta!' : '¡Salida abierta!'
+  const successMsg = isEntry ? 'Señal enviada · Entrada' : 'Señal enviada · Salida'
 
   // Pulse animation while loading
   useEffect(() => {
@@ -307,6 +308,7 @@ export default function DashboardScreen() {
   const { hasPending: hasPendingRaw } = useHasPendingPayments()
   // Admins/managers are never blocked — pending payments belong to residents
   const hasPending = isAdmin ? false : hasPendingRaw
+  const { data: unreadNotifications } = useUnreadCount()
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
@@ -324,11 +326,34 @@ export default function DashboardScreen() {
             <Text style={{ color: '#64748B', fontSize: 14 }}>{greeting},</Text>
             <Text style={{ color: 'white', fontSize: 26, fontWeight: 'bold', marginTop: 2 }}>{firstName}</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/(app)/profile')}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>{initial}</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Bell icon with unread badge */}
+            <TouchableOpacity onPress={() => router.push('/(app)/notifications')} style={{ position: 'relative' }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#334155' }}>
+                <Ionicons name="notifications-outline" size={22} color="#94A3B8" />
+              </View>
+              {(unreadNotifications ?? 0) > 0 && (
+                <View style={{
+                  position: 'absolute', top: 2, right: 2,
+                  backgroundColor: '#EF4444',
+                  borderRadius: 8,
+                  minWidth: 16, height: 16,
+                  alignItems: 'center', justifyContent: 'center',
+                  paddingHorizontal: 3,
+                }}>
+                  <Text style={{ color: 'white', fontSize: 10, fontWeight: '700' }}>
+                    {(unreadNotifications ?? 0) > 9 ? '9+' : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {/* Avatar */}
+            <TouchableOpacity onPress={() => router.push('/(app)/profile')}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 18 }}>{initial}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Community card */}

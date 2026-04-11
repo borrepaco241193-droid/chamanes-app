@@ -28,6 +28,7 @@ export default function AppLayout() {
       <Stack.Screen name="units" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="reports" options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="verify-identity" options={{ animation: 'fade', gestureEnabled: false }} />
+      <Stack.Screen name="notifications" options={{ animation: 'slide_from_right' }} />
     </Stack>
   )
 }
