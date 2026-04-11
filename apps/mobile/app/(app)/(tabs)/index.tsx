@@ -8,6 +8,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Easing,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -16,7 +17,7 @@ import { useMe } from '../../../src/hooks/useAuth'
 import { useHasPendingPayments } from '../../../src/hooks/usePayments'
 import { gateService } from '../../../src/services/gate.service'
 import { Ionicons } from '@expo/vector-icons'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import * as Haptics from 'expo-haptics'
 
 const ROLE_LABEL: Record<string, string> = {
@@ -36,30 +37,61 @@ type GateButtonProps = {
 }
 
 function GateButton({ type, communityId, locked = false }: GateButtonProps) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
-  const scale = useRef(new Animated.Value(1)).current
+  const [status, setStatus]     = useState<'idle' | 'loading' | 'success' | 'error' | 'no-connection'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+  const scale   = useRef(new Animated.Value(1)).current
+  const pulse   = useRef(new Animated.Value(1)).current
+  const shake   = useRef(new Animated.Value(0)).current
 
-  const isEntry = type === 'entry'
-  const color = isEntry ? '#22C55E' : '#F97316'
+  const isEntry   = type === 'entry'
+  const color     = isEntry ? '#22C55E' : '#F97316'
   const darkColor = isEntry ? '#15803D' : '#C2410C'
-  const icon = isEntry ? 'enter' : 'exit'
-  const label = isEntry ? 'Abrir entrada' : 'Abrir salida'
-  const successMsg = isEntry ? '¡Puerta de entrada abierta!' : '¡Puerta de salida abierta!'
+  const icon      = isEntry ? 'enter'   : 'exit'
+  const label     = isEntry ? 'Abrir entrada' : 'Abrir salida'
+  const successMsg = isEntry ? '¡Entrada abierta!' : '¡Salida abierta!'
+
+  // Pulse animation while loading
+  useEffect(() => {
+    if (status === 'loading') {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.06, duration: 500, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+          Animated.timing(pulse, { toValue: 1,    duration: 500, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        ]),
+      )
+      anim.start()
+      return () => anim.stop()
+    } else {
+      pulse.setValue(1)
+    }
+  }, [status])
+
+  // Shake animation on error
+  function runShake() {
+    Animated.sequence([
+      Animated.timing(shake, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue:  8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -6, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue:  6, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -3, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue:  0, duration: 60, useNativeDriver: true }),
+    ]).start()
+  }
 
   async function handlePress() {
-    if (status === 'loading' || locked) return
+    if (status === 'loading') return
     if (locked) {
       Alert.alert('Acceso restringido', 'Tienes pagos pendientes. Realiza tu pago para usar esta función.')
       return
     }
 
-    // Scale animation feedback
     Animated.sequence([
       Animated.timing(scale, { toValue: 0.94, duration: 80, useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: 120, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1,    duration: 120, useNativeDriver: true }),
     ]).start()
 
     setStatus('loading')
+    setErrorMsg('')
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)
 
     try {
@@ -72,65 +104,115 @@ function GateButton({ type, communityId, locked = false }: GateButtonProps) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setTimeout(() => setStatus('idle'), 3000)
     } catch (err: any) {
-      setStatus('error')
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
-      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo abrir la puerta')
-      setTimeout(() => setStatus('idle'), 2000)
+      runShake()
+
+      const httpStatus  = err?.response?.status
+      const serverMsg   = err?.response?.data?.message as string | undefined
+      const isNetworkErr = !err?.response // no response = network/timeout
+
+      if (isNetworkErr || httpStatus === 504 || httpStatus === 502 || httpStatus === 503) {
+        // Relay/device not reachable
+        setStatus('no-connection')
+        setErrorMsg('Sin respuesta del dispositivo')
+      } else {
+        setStatus('error')
+        setErrorMsg(serverMsg ?? 'No se pudo abrir la puerta')
+      }
+
+      setTimeout(() => { setStatus('idle'); setErrorMsg('') }, 4000)
     }
   }
 
-  const bgColor = locked ? '#334155' :
-    status === 'success' ? '#22C55E' :
-    status === 'error'   ? '#EF4444' :
-    darkColor
+  const isError      = status === 'error' || status === 'no-connection'
+  const isNoConn     = status === 'no-connection'
+  const bgColor      = locked           ? '#1E293B'  :
+                       status === 'success'  ? '#22C55E'  :
+                       isError               ? '#7F1D1D'  :
+                       darkColor
+
+  const borderColor  = locked           ? '#334155'  :
+                       status === 'success'  ? '#22C55E'  :
+                       isError               ? '#EF4444'  :
+                       'transparent'
 
   return (
-    <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
+    <Animated.View style={{ flex: 1, transform: [{ scale }, { translateX: shake }] }}>
       <Pressable
         onPress={handlePress}
         style={{
           backgroundColor: bgColor,
           borderRadius: 24,
+          borderWidth: isError ? 1.5 : 0,
+          borderColor,
           padding: 24,
           alignItems: 'center',
           justifyContent: 'center',
           minHeight: 140,
-          shadowColor: bgColor,
+          shadowColor: isError ? '#EF4444' : bgColor,
           shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.4,
+          shadowOpacity: isError ? 0.5 : 0.4,
           shadowRadius: 16,
           elevation: 8,
+          overflow: 'hidden',
         }}
       >
         {locked ? (
           <>
-            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <Ionicons name="lock-closed" size={32} color="#64748B" />
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Ionicons name="lock-closed" size={32} color="#475569" />
             </View>
-            <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 14, textAlign: 'center' }}>{label}</Text>
-            <Text style={{ color: '#475569', fontSize: 11, marginTop: 4, textAlign: 'center' }}>Pago pendiente</Text>
+            <Text style={{ color: '#475569', fontWeight: '700', fontSize: 14, textAlign: 'center' }}>{label}</Text>
+            <Text style={{ color: '#334155', fontSize: 11, marginTop: 4 }}>Pago pendiente</Text>
           </>
+
         ) : status === 'loading' ? (
-          <ActivityIndicator color="white" size="large" />
+          <Animated.View style={{ alignItems: 'center', transform: [{ scale: pulse }] }}>
+            <ActivityIndicator color="white" size="large" />
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 10 }}>Conectando...</Text>
+          </Animated.View>
+
         ) : status === 'success' ? (
           <>
             <Ionicons name="checkmark-circle" size={48} color="white" />
-            <Text style={{ color: 'white', fontWeight: '700', fontSize: 14, marginTop: 10, textAlign: 'center' }}>
+            <Text style={{ color: 'white', fontWeight: '700', fontSize: 15, marginTop: 10, textAlign: 'center' }}>
               {successMsg}
             </Text>
           </>
+
+        ) : isNoConn ? (
+          <>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(239,68,68,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+              <Ionicons name="wifi-outline" size={32} color="#EF4444" />
+            </View>
+            <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 14, textAlign: 'center' }}>
+              Sin conexión
+            </Text>
+            <Text style={{ color: '#FCA5A5', fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+              El dispositivo no responde
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <Ionicons name="radio-outline" size={11} color="#EF4444" />
+              <Text style={{ color: '#EF4444', fontSize: 10 }}>Verificar relevador</Text>
+            </View>
+          </>
+
+        ) : status === 'error' ? (
+          <>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(239,68,68,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+              <Ionicons name="alert-circle-outline" size={32} color="#EF4444" />
+            </View>
+            <Text style={{ color: '#EF4444', fontWeight: '800', fontSize: 14, textAlign: 'center' }}>
+              Error
+            </Text>
+            <Text style={{ color: '#FCA5A5', fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+              {errorMsg}
+            </Text>
+          </>
+
         ) : (
           <>
-            {/* Outer glow ring */}
-            <View style={{
-              width: 72,
-              height: 72,
-              borderRadius: 36,
-              backgroundColor: 'rgba(255,255,255,0.15)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 12,
-            }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <Ionicons name={icon as any} size={36} color="white" />
             </View>
             <Text style={{ color: 'white', fontWeight: '800', fontSize: 15, textAlign: 'center', letterSpacing: 0.3 }}>
