@@ -224,6 +224,11 @@ export const residentService = {
     return res.data
   },
 
+  async verifyAdminOtp(communityId: string, userId: string, otp: string) {
+    const res = await api.post(`/communities/${communityId}/residents/${userId}/verify-otp`, { otp })
+    return res.data as { ok: boolean; message: string }
+  },
+
   // Cash payment
   async markPaid(communityId: string, paymentId: string, data: {
     paymentMethod: 'CASH' | 'TRANSFER' | 'CHECK'

@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useResidents, useUnits, useCreateUnit, useCreateResident, useDeleteResident } from '../../src/hooks/useResidents'
+import { useResidents, useUnits, useCreateUnit, useCreateResident, useDeleteResident, useVerifyAdminOtp } from '../../src/hooks/useResidents'
 import { useAuthStore } from '../../src/stores/auth.store'
 import type { Resident, OccupancyType } from '../../src/services/resident.service'
 import { useDebounce } from '../../src/hooks/useDebounce'
@@ -132,6 +132,7 @@ function NewUnitModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
 function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClose: () => void; units: { id: string; number: string; block?: string | null }[] }) {
   const { mutateAsync: createResident, isPending } = useCreateResident()
+  const { mutateAsync: verifyOtp, isPending: isVerifying } = useVerifyAdminOtp()
   const communityId = useAuthStore((s) => s.user?.communityId)
   const currentUser = useAuthStore((s) => s.user)
   const isTopAdmin =
@@ -144,6 +145,17 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
     emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '',
   })
   const set = (k: string) => (v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // OTP step state
+  const [otpStep, setOtpStep] = useState<{ userId: string; email: string; role: string } | null>(null)
+  const [otpCode, setOtpCode] = useState('')
+
+  function handleClose() {
+    setOtpStep(null)
+    setOtpCode('')
+    setForm({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'RESIDENT', unitId: '', occupancyType: 'OWNER', emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '' })
+    onClose()
+  }
 
   async function handleSubmit() {
     if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim()) {
@@ -165,18 +177,36 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
         emergencyContactPhone:    form.emergencyContactPhone || null,
         emergencyContactRelation: form.emergencyContactRelation || null,
       })
-      onClose()
-      setForm({ firstName: '', lastName: '', email: '', phone: '', password: '', role: 'RESIDENT', unitId: '', occupancyType: 'OWNER', emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '' })
+
+      if (result?.requiresOtp) {
+        // Show OTP step — don't close modal yet
+        setOtpStep({ userId: result.userId, email: form.email.trim().toLowerCase(), role: form.role })
+        setOtpCode('')
+        return
+      }
+
+      handleClose()
       if (result?.tempPassword) {
         Alert.alert(
-          'Residente registrado',
-          `Contraseña temporal generada:\n\n${result.tempPassword}\n\nCompártela con el residente y pídele que la cambie al iniciar sesión.`,
+          'Usuario registrado',
+          `Contraseña temporal generada:\n\n${result.tempPassword}\n\nCompártela con el usuario y pídele que la cambie al iniciar sesión.`,
         )
       } else {
-        Alert.alert('Listo', 'Residente registrado. Ya puede iniciar sesión.')
+        Alert.alert('Listo', 'Usuario registrado. Ya puede iniciar sesión.')
       }
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo registrar el residente')
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo registrar el usuario')
+    }
+  }
+
+  async function handleVerifyOtp() {
+    if (!otpStep || otpCode.length !== 6) return Alert.alert('Código inválido', 'El código debe tener 6 dígitos.')
+    try {
+      await verifyOtp({ userId: otpStep.userId, otp: otpCode })
+      handleClose()
+      Alert.alert('✅ Cuenta verificada', 'La cuenta fue activada correctamente. El usuario ya puede iniciar sesión.')
+    } catch (err: any) {
+      Alert.alert('Código incorrecto', err?.response?.data?.message ?? 'No se pudo verificar. Intenta de nuevo.')
     }
   }
 
@@ -192,11 +222,69 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
     : ALL_ROLES.filter(([k]) => k !== 'COMMUNITY_ADMIN' && k !== 'MANAGER')
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
+
+        {/* ── OTP verification step ── */}
+        {otpStep ? (
+          <View style={{ flex: 1, padding: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Verificar cuenta</Text>
+              <TouchableOpacity onPress={handleClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
+            </View>
+
+            <View style={{ alignItems: 'center', marginBottom: 32 }}>
+              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#3B82F620', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1.5, borderColor: '#3B82F640' }}>
+                <Ionicons name="shield-checkmark-outline" size={34} color="#3B82F6" />
+              </View>
+              <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Código de verificación</Text>
+              <Text style={{ color: '#64748B', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+                Enviamos un código de 6 dígitos a{'\n'}
+                <Text style={{ color: '#94A3B8', fontWeight: '600' }}>{otpStep.email}</Text>
+              </Text>
+            </View>
+
+            <TextInput
+              value={otpCode}
+              onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+              keyboardType="number-pad"
+              maxLength={6}
+              placeholder="000000"
+              placeholderTextColor="#334155"
+              style={{
+                backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 1.5,
+                borderColor: otpCode.length === 6 ? '#3B82F6' : '#334155',
+                color: 'white', fontSize: 32, fontWeight: '800',
+                letterSpacing: 12, textAlign: 'center', paddingVertical: 16,
+                marginBottom: 20,
+              }}
+            />
+
+            <TouchableOpacity
+              onPress={handleVerifyOtp}
+              disabled={isVerifying || otpCode.length !== 6}
+              style={{
+                backgroundColor: otpCode.length === 6 ? '#3B82F6' : '#1E293B',
+                borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+                borderWidth: 1, borderColor: otpCode.length === 6 ? '#3B82F6' : '#334155',
+              }}
+            >
+              {isVerifying
+                ? <ActivityIndicator color="white" />
+                : <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Verificar y activar cuenta</Text>
+              }
+            </TouchableOpacity>
+
+            <Text style={{ color: '#475569', fontSize: 12, textAlign: 'center', marginTop: 16 }}>
+              El código expira en 15 minutos. Si no llega, revisa spam o elimina el usuario y créalo de nuevo.
+            </Text>
+          </View>
+        ) : (
+        <>
+
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
           <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }}>Nuevo usuario</Text>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
+          <TouchableOpacity onPress={handleClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: 20 }}>
 
@@ -272,6 +360,8 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
             {isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>Registrar usuario</Text>}
           </TouchableOpacity>
         </View>
+        </>
+        )}
       </SafeAreaView>
     </Modal>
   )

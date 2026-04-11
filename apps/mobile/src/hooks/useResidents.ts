@@ -188,3 +188,15 @@ export function useMarkPaid() {
     },
   })
 }
+
+export function useVerifyAdminOtp() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, otp }: { userId: string; otp: string }) =>
+      residentService.verifyAdminOtp(communityId, userId, otp),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}

@@ -169,6 +169,24 @@ export function newReservationEmail(
   `)
 }
 
+export function adminOtpEmail(firstName: string, otp: string, role: string): string {
+  const roleLabel = role === 'COMMUNITY_ADMIN' ? 'Administrador' : 'Manager'
+  return emailWrapper(`
+    <h2 style="color: #0F172A; margin: 0 0 4px;">Verificación de cuenta ${roleLabel}</h2>
+    <p style="color: #64748B; font-size: 14px; margin: 0 0 24px;">Hola ${firstName}, se creó tu cuenta con rol <strong>${roleLabel}</strong>. Usa el código de abajo para verificarla.</p>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <div style="background: #0F172A; border: 2px solid #3B82F6; border-radius: 16px; display: inline-block; padding: 20px 40px;">
+        <p style="margin: 0 0 4px; color: #64748B; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;">Código de verificación</p>
+        <p style="margin: 0; color: #F1F5F9; font-size: 40px; font-weight: 800; letter-spacing: 10px;">${otp}</p>
+      </div>
+    </div>
+
+    <p style="color: #475569; font-size: 14px; text-align: center;">Este código expira en <strong>15 minutos</strong>.</p>
+    <p style="color: #94A3B8; font-size: 13px; text-align: center;">Si no solicitaste este acceso, ignora este mensaje.</p>
+  `)
+}
+
 export function reservationApprovedEmail(
   residentName: string,
   areaName: string,

@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
+import { sendEmail, adminOtpEmail } from '../../lib/email.js'
 
 // ============================================================
 // Resident Management Routes (COMMUNITY_ADMIN | MANAGER | SUPER_ADMIN)
@@ -513,12 +514,79 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      // ── 2FA OTP for privileged roles ──────────────────────
+      const isPrivilegedRole = body.role === 'MANAGER' || body.role === 'COMMUNITY_ADMIN'
+      if (isPrivilegedRole) {
+        const otp = String(Math.floor(100000 + Math.random() * 900000)) // 6 digits
+        const otpHash = await bcrypt.hash(otp, 10)
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 min
+
+        await fastify.prisma.adminOtp.upsert({
+          where:  { userId },
+          update: { code: otpHash, expiresAt, verified: false },
+          create: { userId, code: otpHash, expiresAt },
+        })
+
+        // Mark user as not yet verified until OTP is confirmed
+        await fastify.prisma.user.update({
+          where: { id: userId },
+          data:  { isVerified: false },
+        })
+
+        const roleLabel = body.role === 'COMMUNITY_ADMIN' ? 'Administrador' : 'Manager'
+        sendEmail({
+          to: body.email,
+          subject: `Código de verificación — cuenta ${roleLabel}`,
+          html: adminOtpEmail(body.firstName, otp, body.role),
+        }).catch(() => {})
+
+        return reply.code(201).send({
+          ok: true,
+          userId,
+          communityUserId: communityUser.id,
+          tempPassword:    (req as any)._tempPassword ?? null,
+          requiresOtp:     true,
+        })
+      }
+
       return reply.code(201).send({
         ok: true,
         userId,
         communityUserId: communityUser.id,
         tempPassword: (req as any)._tempPassword ?? null,
+        requiresOtp:  false,
       })
+    },
+  )
+
+  // ── VERIFY OTP (2FA for Manager/Admin) ────────────────────
+  fastify.post<{ Params: { communityId: string; userId: string }; Body: unknown }>(
+    '/:communityId/residents/:userId/verify-otp',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const { userId } = req.params
+      const { otp } = z.object({ otp: z.string().length(6) }).parse(req.body)
+
+      const record = await fastify.prisma.adminOtp.findUnique({ where: { userId } })
+
+      if (!record || record.verified) {
+        return reply.code(400).send({ message: 'Código no válido o ya utilizado.' })
+      }
+      if (new Date() > record.expiresAt) {
+        return reply.code(400).send({ message: 'El código expiró. Elimina y vuelve a crear el usuario para generar uno nuevo.' })
+      }
+
+      const valid = await bcrypt.compare(otp, record.code)
+      if (!valid) {
+        return reply.code(400).send({ message: 'Código incorrecto.' })
+      }
+
+      await Promise.all([
+        fastify.prisma.adminOtp.update({ where: { userId }, data: { verified: true } }),
+        fastify.prisma.user.update({ where: { id: userId }, data: { isVerified: true } }),
+      ])
+
+      return reply.send({ ok: true, message: 'Cuenta verificada correctamente.' })
     },
   )
 

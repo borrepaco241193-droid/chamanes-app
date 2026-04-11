@@ -173,6 +173,7 @@ model User {
   notifications  Notification[]
   staffProfile   Staff?
   auditLogs      AuditLog[]
+  adminOtp       AdminOtp?
 
   @@map("users")
 }
@@ -593,6 +594,21 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ── Admin OTP (2FA for Manager/Admin creation) ───────────────
+
+model AdminOtp {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String   // bcrypt-hashed 6-digit OTP
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_otps")
 }
 
 // ── Audit Log ─────────────────────────────────────────────────
