@@ -1,8 +1,6 @@
-import * as FileSystem from 'expo-file-system'
-import * as Sharing from 'expo-sharing'
+import { Share } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Constants from 'expo-constants'
-import { Alert } from 'react-native'
 
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -34,26 +32,16 @@ export async function downloadAndShareCSV(
 
   const url = `${API_URL}/api/v1/communities/${communityId}/admin/csv/${type}?${params.toString()}`
 
-  const filename = `${type}_${communityId}_${new Date().toISOString().slice(0, 10)}.csv`
-  const fileUri  = FileSystem.cacheDirectory + filename
-
-  const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   })
 
-  if (downloadResult.status !== 200) {
-    throw new Error(`Error al descargar reporte (${downloadResult.status})`)
-  }
+  if (!res.ok) throw new Error(`Error al descargar reporte (${res.status})`)
 
-  const canShare = await Sharing.isAvailableAsync()
-  if (!canShare) {
-    Alert.alert('Descargado', `El archivo fue guardado en: ${fileUri}`)
-    return
-  }
+  const csv = await res.text()
 
-  await Sharing.shareAsync(fileUri, {
-    mimeType: 'text/csv',
-    dialogTitle: `Reporte de ${REPORT_LABELS[type]}`,
-    UTI: 'public.comma-separated-values-text',
+  await Share.share({
+    title:   `Reporte ${REPORT_LABELS[type]}`,
+    message: csv,
   })
 }
