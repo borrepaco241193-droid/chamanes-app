@@ -47,3 +47,33 @@ export function useCurrentCommunity() {
   const communityId = useAuthStore((s) => s.user?.communityId)
   return useCommunity(communityId)
 }
+
+export function useCommunityMembers(communityId?: string) {
+  return useQuery({
+    queryKey: ['community-members', communityId],
+    queryFn: () => communityService.listMembers(communityId!),
+    enabled: !!communityId,
+    staleTime: 30_000,
+  })
+}
+
+export function useAssignCommunityMember(communityId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Parameters<typeof communityService.assignMember>[1]) =>
+      communityService.assignMember(communityId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-members', communityId] })
+    },
+  })
+}
+
+export function useRemoveCommunityMember(communityId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => communityService.removeMember(communityId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['community-members', communityId] })
+    },
+  })
+}

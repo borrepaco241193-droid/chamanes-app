@@ -434,7 +434,7 @@ export default function AdminScreen() {
                 <View className="flex-1">
                   <Text className="text-white font-semibold text-base">Gestionar comunidades</Text>
                   <Text className="text-surface-muted text-xs mt-0.5">
-                    Crear, editar y cambiar comunidad activa
+                    Crear clusters, asignar admins y managers
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color="#475569" />

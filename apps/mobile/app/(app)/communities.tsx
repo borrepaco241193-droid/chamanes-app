@@ -7,9 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useCommunities, useCreateCommunity } from '../../src/hooks/useCommunity'
+import {
+  useCommunities, useCreateCommunity,
+  useCommunityMembers, useAssignCommunityMember, useRemoveCommunityMember,
+} from '../../src/hooks/useCommunity'
 import { useAuthStore } from '../../src/stores/auth.store'
-import type { Community } from '../../src/services/community.service'
+import type { Community, CommunityMember } from '../../src/services/community.service'
 
 // ── Field component ───────────────────────────────────────────
 
@@ -81,25 +84,20 @@ function NewCommunityModal({ visible, onClose, onCreated }: {
           <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
         </View>
         <ScrollView contentContainerStyle={{ padding: 20 }}>
-
           <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 }}>INFORMACIÓN GENERAL</Text>
           <Field label="Nombre de la comunidad" value={form.name} onChangeText={set('name')} placeholder="Residencial Los Pinos" required />
           <Field label="Dirección" value={form.address} onChangeText={set('address')} placeholder="Av. Principal 123" required />
-
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}><Field label="Ciudad" value={form.city} onChangeText={set('city')} placeholder="CDMX" required /></View>
             <View style={{ flex: 1 }}><Field label="Estado" value={form.state} onChangeText={set('state')} placeholder="CDMX" required /></View>
           </View>
-
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}><Field label="País" value={form.country} onChangeText={set('country')} placeholder="MX" autoCapitalize="characters" /></View>
             <View style={{ flex: 1 }}><Field label="Código postal" value={form.zipCode} onChangeText={set('zipCode')} keyboardType="number-pad" placeholder="06600" /></View>
           </View>
-
           <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12, marginTop: 4 }}>CONTACTO</Text>
           <Field label="Teléfono" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" autoCapitalize="none" />
           <Field label="Correo electrónico" value={form.email} onChangeText={set('email')} keyboardType="email-address" autoCapitalize="none" />
-
           <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12, marginTop: 4 }}>CONFIGURACIÓN</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ flex: 1 }}><Field label="Moneda" value={form.currency} onChangeText={set('currency')} placeholder="MXN" autoCapitalize="characters" /></View>
@@ -117,46 +115,203 @@ function NewCommunityModal({ visible, onClose, onCreated }: {
   )
 }
 
+// ── Community Detail Modal (managers + assign) ────────────────
+
+const ROLE_LABEL: Record<string, string> = { COMMUNITY_ADMIN: 'Administrador', MANAGER: 'Manager' }
+const ROLE_COLOR: Record<string, string> = { COMMUNITY_ADMIN: '#8B5CF6', MANAGER: '#3B82F6' }
+
+function CommunityDetailModal({ community, visible, onClose }: {
+  community: Community | null
+  visible: boolean
+  onClose: () => void
+}) {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<'COMMUNITY_ADMIN' | 'MANAGER'>('MANAGER')
+
+  const { data, isLoading, refetch } = useCommunityMembers(community?.id)
+  const { mutateAsync: assignMember, isPending: isAssigning } = useAssignCommunityMember(community?.id ?? '')
+  const { mutateAsync: removeMember } = useRemoveCommunityMember(community?.id ?? '')
+
+  const members = data?.members ?? []
+
+  async function handleAssign() {
+    if (!email.trim()) return Alert.alert('Error', 'Ingresa el correo del usuario')
+    try {
+      const res = await assignMember({ email: email.trim().toLowerCase(), role })
+      setEmail('')
+      Alert.alert('Asignado', `${res.firstName} ${res.lastName} ahora es ${ROLE_LABEL[role]} de ${community?.name}`)
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo asignar el usuario')
+    }
+  }
+
+  function handleRemove(member: CommunityMember) {
+    Alert.alert(
+      'Remover acceso',
+      `¿Remover a ${member.user.firstName} ${member.user.lastName} de ${community?.name}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover', style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeMember(member.userId)
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo remover')
+            }
+          },
+        },
+      ],
+    )
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A' }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#1E293B' }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: 'white', fontSize: 18, fontWeight: '700' }} numberOfLines={1}>{community?.name}</Text>
+            <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{community?.city}, {community?.state} · {community?.totalUnits} unidades</Text>
+          </View>
+          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color="#94A3B8" /></TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
+
+          {/* Stats row */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+            {[
+              { icon: 'home-outline', color: '#3B82F6', label: 'Unidades', val: community?.totalUnits ?? 0 },
+              { icon: 'cash-outline', color: '#10B981', label: 'Moneda', val: community?.currency ?? '' },
+            ].map((s) => (
+              <View key={s.label} style={{ flex: 1, backgroundColor: '#1E293B', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#334155' }}>
+                <Ionicons name={s.icon as any} size={18} color={s.color} />
+                <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', marginTop: 8 }}>{s.val}</Text>
+                <Text style={{ color: '#64748B', fontSize: 11, marginTop: 2 }}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Assign section */}
+          <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 }}>ASIGNAR ADMINISTRADOR / MANAGER</Text>
+          <Text style={{ color: '#94A3B8', fontSize: 12, marginBottom: 6 }}>Rol a asignar</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            {(['COMMUNITY_ADMIN', 'MANAGER'] as const).map((r) => (
+              <TouchableOpacity key={r} onPress={() => setRole(r)}
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1, alignItems: 'center',
+                  borderColor: role === r ? ROLE_COLOR[r] : '#334155',
+                  backgroundColor: role === r ? `${ROLE_COLOR[r]}20` : '#1E293B' }}>
+                <Text style={{ color: role === r ? ROLE_COLOR[r] : '#94A3B8', fontWeight: '600', fontSize: 13 }}>
+                  {ROLE_LABEL[r]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+            <TextInput
+              value={email} onChangeText={setEmail}
+              placeholder="correo@ejemplo.com" placeholderTextColor="#475569"
+              keyboardType="email-address" autoCapitalize="none"
+              style={{ flex: 1, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: 'white', fontSize: 15 }}
+            />
+            <TouchableOpacity onPress={handleAssign} disabled={isAssigning}
+              style={{ backgroundColor: '#3B82F6', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' }}>
+              {isAssigning
+                ? <ActivityIndicator color="white" size="small" />
+                : <Ionicons name="person-add-outline" size={20} color="white" />}
+            </TouchableOpacity>
+          </View>
+
+          {/* Members list */}
+          <Text style={{ color: '#3B82F6', fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 12 }}>
+            ADMINISTRADORES ASIGNADOS {members.length > 0 ? `(${members.length})` : ''}
+          </Text>
+
+          {isLoading ? (
+            <ActivityIndicator color="#3B82F6" style={{ marginVertical: 24 }} />
+          ) : members.length === 0 ? (
+            <View style={{ backgroundColor: '#1E293B', borderRadius: 14, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#334155', marginBottom: 16 }}>
+              <Ionicons name="people-outline" size={32} color="#334155" />
+              <Text style={{ color: '#64748B', fontSize: 13, marginTop: 10, textAlign: 'center' }}>
+                Sin administradores asignados.{'\n'}Ingresa el correo de un usuario registrado para asignarle acceso.
+              </Text>
+            </View>
+          ) : (
+            members.map((m) => (
+              <View key={m.communityUserId} style={{ backgroundColor: '#1E293B', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, borderWidth: 1, borderColor: '#334155' }}>
+                <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: `${ROLE_COLOR[m.role]}20`, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: `${ROLE_COLOR[m.role]}40` }}>
+                  <Text style={{ color: ROLE_COLOR[m.role], fontWeight: '700', fontSize: 16 }}>
+                    {m.user.firstName[0]?.toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: 'white', fontWeight: '600', fontSize: 14 }}>{m.user.firstName} {m.user.lastName}</Text>
+                  <Text style={{ color: '#64748B', fontSize: 12, marginTop: 1 }}>{m.user.email}</Text>
+                  <View style={{ marginTop: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: `${ROLE_COLOR[m.role]}20` }}>
+                    <Text style={{ color: ROLE_COLOR[m.role], fontSize: 10, fontWeight: '700' }}>{ROLE_LABEL[m.role]}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => handleRemove(m)} style={{ padding: 6 }}>
+                  <Ionicons name="person-remove-outline" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  )
+}
+
 // ── Community Card ────────────────────────────────────────────
 
-function CommunityCard({ community, isActive, onSelect }: {
+function CommunityCard({ community, isActive, onSelect, onManage }: {
   community: Community
   isActive: boolean
   onSelect: () => void
+  onManage: () => void
 }) {
   return (
-    <TouchableOpacity
-      onPress={onSelect}
-      activeOpacity={0.75}
-      style={{
-        backgroundColor: isActive ? '#1E3A5F' : '#1E293B',
-        borderRadius: 16, marginBottom: 10, padding: 16,
-        borderWidth: 1.5,
-        borderColor: isActive ? '#3B82F6' : '#334155',
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-      }}
-    >
-      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: isActive ? '#3B82F620' : '#0F172A', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isActive ? '#3B82F640' : '#1E293B' }}>
-        <Ionicons name="business-outline" size={22} color={isActive ? '#3B82F6' : '#64748B'} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{community.name}</Text>
-        <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{community.city}, {community.state}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 5 }}>
-          <View style={{ backgroundColor: '#0F172A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-            <Text style={{ color: '#94A3B8', fontSize: 10 }}>{community.totalUnits} unidades</Text>
-          </View>
-          <View style={{ backgroundColor: '#0F172A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-            <Text style={{ color: '#94A3B8', fontSize: 10 }}>{community.currency}</Text>
+    <View style={{
+      backgroundColor: isActive ? '#1E3A5F' : '#1E293B',
+      borderRadius: 16, marginBottom: 10,
+      borderWidth: 1.5,
+      borderColor: isActive ? '#3B82F6' : '#334155',
+    }}>
+      {/* Main tap → select */}
+      <TouchableOpacity onPress={onSelect} activeOpacity={0.75}
+        style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: isActive ? '#3B82F620' : '#0F172A', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isActive ? '#3B82F640' : '#1E293B' }}>
+          <Ionicons name="business-outline" size={22} color={isActive ? '#3B82F6' : '#64748B'} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{community.name}</Text>
+          <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{community.city}, {community.state}</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 5 }}>
+            <View style={{ backgroundColor: '#0F172A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ color: '#94A3B8', fontSize: 10 }}>{community.totalUnits} unidades</Text>
+            </View>
+            <View style={{ backgroundColor: '#0F172A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ color: '#94A3B8', fontSize: 10 }}>{community.currency}</Text>
+            </View>
           </View>
         </View>
-      </View>
-      {isActive && (
-        <View style={{ backgroundColor: '#3B82F6', borderRadius: 20, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="checkmark" size={14} color="white" />
-        </View>
-      )}
-    </TouchableOpacity>
+        {isActive && (
+          <View style={{ backgroundColor: '#3B82F6', borderRadius: 20, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="checkmark" size={14} color="white" />
+          </View>
+        )}
+      </TouchableOpacity>
+
+      {/* Manage admins button */}
+      <TouchableOpacity onPress={onManage} activeOpacity={0.75}
+        style={{ borderTopWidth: 1, borderTopColor: '#334155', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Ionicons name="people-outline" size={15} color="#3B82F6" />
+        <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600', flex: 1 }}>Gestionar administradores</Text>
+        <Ionicons name="chevron-forward" size={14} color="#475569" />
+      </TouchableOpacity>
+    </View>
   )
 }
 
@@ -168,6 +323,8 @@ export default function CommunitiesScreen() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
 
   const [showNew, setShowNew] = useState(false)
+  const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
+
   const { data, isLoading, isRefetching, refetch } = useCommunities()
   const communities = data?.communities ?? []
 
@@ -221,7 +378,7 @@ export default function CommunitiesScreen() {
       <View style={{ marginHorizontal: 20, marginBottom: 16, backgroundColor: '#1E293B', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: '#334155' }}>
         <Ionicons name="information-circle-outline" size={18} color="#3B82F6" />
         <Text style={{ color: '#94A3B8', fontSize: 12, flex: 1 }}>
-          Toca una comunidad para activarla. Todos los residentes, unidades y pagos quedan organizados por comunidad.
+          Toca una comunidad para activarla. Usa "Gestionar administradores" para asignar managers y admins a cada cluster.
         </Text>
       </View>
 
@@ -238,6 +395,7 @@ export default function CommunitiesScreen() {
               community={item}
               isActive={item.id === user?.communityId}
               onSelect={() => handleSelect(item)}
+              onManage={() => setManagingCommunity(item)}
             />
           )}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
@@ -260,6 +418,12 @@ export default function CommunitiesScreen() {
         onCreated={(community) => {
           setCommunity(community.id, 'COMMUNITY_ADMIN')
         }}
+      />
+
+      <CommunityDetailModal
+        visible={!!managingCommunity}
+        community={managingCommunity}
+        onClose={() => setManagingCommunity(null)}
       />
     </SafeAreaView>
   )

@@ -114,6 +114,107 @@ const communityRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ ok: true })
     },
   )
+
+  // ── List community admins/managers ─────────────────────────
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/members',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const members = await fastify.prisma.communityUser.findMany({
+        where: {
+          communityId,
+          isActive: true,
+          role: { in: [UserRole.COMMUNITY_ADMIN, UserRole.MANAGER] },
+        },
+        orderBy: [{ role: 'asc' }, { user: { lastName: 'asc' } }],
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, email: true, phone: true, avatarUrl: true },
+          },
+        },
+      })
+      return reply.send({ members: members.map((m) => ({
+        communityUserId: m.id,
+        userId: m.userId,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        user: m.user,
+      })) })
+    },
+  )
+
+  // ── Assign user to community as admin/manager ──────────────
+  const assignMemberSchema = z.object({
+    email: z.string().email(),
+    role: z.enum(['COMMUNITY_ADMIN', 'MANAGER']),
+  })
+
+  fastify.post<{ Params: { communityId: string }; Body: unknown }>(
+    '/:communityId/members',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const { email, role } = assignMemberSchema.parse(req.body)
+
+      const user = await fastify.prisma.user.findUnique({ where: { email } })
+      if (!user) {
+        return reply.code(404).send({ error: 'NotFound', message: `No existe ningún usuario con el correo ${email}` })
+      }
+
+      // Update globalRole to match the assigned community role
+      await fastify.prisma.user.update({
+        where: { id: user.id },
+        data: { globalRole: role as UserRole },
+      })
+
+      // Upsert CommunityUser
+      const existing = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId: user.id, communityId } },
+      })
+
+      if (existing) {
+        await fastify.prisma.communityUser.update({
+          where: { id: existing.id },
+          data: { role: role as UserRole, isActive: true },
+        })
+      } else {
+        await fastify.prisma.communityUser.create({
+          data: { userId: user.id, communityId, role: role as UserRole, isActive: true },
+        })
+      }
+
+      return reply.code(201).send({ ok: true, userId: user.id, firstName: user.firstName, lastName: user.lastName })
+    },
+  )
+
+  // ── Remove user from community admin/manager role ──────────
+  fastify.delete<{ Params: { communityId: string; userId: string } }>(
+    '/:communityId/members/:userId',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { communityId, userId } = req.params
+
+      const member = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId, communityId } },
+      })
+      if (!member) {
+        return reply.code(404).send({ error: 'NotFound', message: 'Miembro no encontrado' })
+      }
+
+      // Deactivate membership and downgrade globalRole to RESIDENT
+      await fastify.prisma.communityUser.update({
+        where: { id: member.id },
+        data: { isActive: false },
+      })
+      await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { globalRole: UserRole.RESIDENT },
+      })
+
+      return reply.send({ ok: true })
+    },
+  )
 }
 
 export default communityRoutes
