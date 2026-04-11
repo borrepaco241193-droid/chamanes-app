@@ -34,6 +34,7 @@ enum AccessMethod {
   QR_CODE
   MANUAL_GUARD
   PLATE_RECOGNITION
+  APP
 }
 
 enum VisitorPassStatus {
@@ -159,6 +160,8 @@ model User {
   resetTokenExpiresAt DateTime?
   lastLoginAt  DateTime?
   pushToken    String?   // Expo push token for notifications
+  idPhotoUrl   String?   // Official ID photo uploaded by user for identity verification
+  idVerified   Boolean   @default(false) // Set to true by admin after reviewing idPhotoUrl
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

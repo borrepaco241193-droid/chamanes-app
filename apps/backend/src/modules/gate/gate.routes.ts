@@ -33,23 +33,40 @@ const gateRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { communityId } = req.params
       const key = `gate:cmd:${communityId}`
+      const userId = req.user.sub
 
       const cmd = JSON.stringify({
         type: 'ENTRY',
-        requestedBy: req.user.sub,
+        requestedBy: userId,
         requestedAt: new Date().toISOString(),
       })
 
       await fastify.redis.setex(key, GATE_TTL_SECONDS, cmd)
 
-      // Log the event
-      await fastify.prisma.auditLog.create({
-        data: {
-          userId: req.user.sub,
-          communityId,
-          action: 'gate.open_requested',
-        },
+      // Fetch user name for the access log
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true, globalRole: true },
       })
+      const personName = user ? `${user.firstName} ${user.lastName}` : userId
+      const roleToType: Record<string, string> = {
+        RESIDENT: 'resident', COMMUNITY_ADMIN: 'admin', MANAGER: 'manager',
+        SUPER_ADMIN: 'admin', GUARD: 'guard', STAFF: 'staff',
+      }
+
+      await Promise.all([
+        fastify.prisma.auditLog.create({ data: { userId, communityId, action: 'gate.open_requested' } }),
+        fastify.prisma.accessEvent.create({
+          data: {
+            communityId,
+            type: 'ENTRY',
+            method: 'APP',
+            personName,
+            personType: roleToType[user?.globalRole ?? ''] ?? 'resident',
+            isAllowed: true,
+          },
+        }),
+      ])
 
       return reply.send({ queued: true, expiresIn: GATE_TTL_SECONDS })
     },
@@ -72,22 +89,39 @@ const gateRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { communityId } = req.params
       const key = `gate:cmd:${communityId}`
+      const userId = req.user.sub
 
       const cmd = JSON.stringify({
         type: 'EXIT',
-        requestedBy: req.user.sub,
+        requestedBy: userId,
         requestedAt: new Date().toISOString(),
       })
 
       await fastify.redis.setex(key, GATE_TTL_SECONDS, cmd)
 
-      await fastify.prisma.auditLog.create({
-        data: {
-          userId: req.user.sub,
-          communityId,
-          action: 'gate.exit_requested',
-        },
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        select: { firstName: true, lastName: true, globalRole: true },
       })
+      const personName = user ? `${user.firstName} ${user.lastName}` : userId
+      const roleToType: Record<string, string> = {
+        RESIDENT: 'resident', COMMUNITY_ADMIN: 'admin', MANAGER: 'manager',
+        SUPER_ADMIN: 'admin', GUARD: 'guard', STAFF: 'staff',
+      }
+
+      await Promise.all([
+        fastify.prisma.auditLog.create({ data: { userId, communityId, action: 'gate.exit_requested' } }),
+        fastify.prisma.accessEvent.create({
+          data: {
+            communityId,
+            type: 'EXIT',
+            method: 'APP',
+            personName,
+            personType: roleToType[user?.globalRole ?? ''] ?? 'resident',
+            isAllowed: true,
+          },
+        }),
+      ])
 
       return reply.send({ queued: true, expiresIn: GATE_TTL_SECONDS })
     },

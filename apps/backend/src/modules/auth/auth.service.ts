@@ -141,6 +141,8 @@ export class AuthService {
         role: user.globalRole,
         communityId: activeCommunity?.communityId ?? superAdminCommunityId,
         communityRole: activeCommunity?.role,
+        idVerified: user.idVerified,
+        idPhotoUploaded: !!user.idPhotoUrl,
         communities: user.communityUsers.map((cu) => ({
           id: cu.communityId,
           name: cu.community.name,

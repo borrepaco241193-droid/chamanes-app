@@ -44,4 +44,14 @@ export const adminService = {
     })
     return res.data
   },
+
+  async getPendingIdVerifications(communityId: string) {
+    const res = await api.get(`/communities/${communityId}/admin/id-pending`)
+    return res.data as { pending: { id: string; firstName: string; lastName: string; email: string; idPhotoUrl: string }[] }
+  },
+
+  async verifyId(communityId: string, userId: string, approve: boolean) {
+    const res = await api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve })
+    return res.data
+  },
 }

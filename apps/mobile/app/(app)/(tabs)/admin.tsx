@@ -6,15 +6,19 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   useWindowDimensions,
+  Alert,
+  Image,
+  Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { Svg, Rect, Text as SvgText, G } from 'react-native-svg'
-import { useDashboardStats, usePaymentReport, useAccessReport } from '../../../src/hooks/useAdmin'
+import { useDashboardStats, usePaymentReport, useAccessReport, usePendingIdVerifications, useVerifyId } from '../../../src/hooks/useAdmin'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { router } from 'expo-router'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useState } from 'react'
 
 // ── Stat Card ─────────────────────────────────────────────────
 
@@ -171,11 +175,28 @@ export default function AdminScreen() {
   const { data: stats, isLoading, refetch: refetchStats, isRefetching } = useDashboardStats()
   const { data: paymentReport, refetch: refetchPayments } = usePaymentReport(6)
   const { data: accessReport, refetch: refetchAccess } = useAccessReport(7)
+  const { data: idPendingData, refetch: refetchIdPending } = usePendingIdVerifications()
+  const { mutateAsync: verifyId } = useVerifyId()
+  const [previewPhoto, setPreviewPhoto] = useState<{ uri: string; name: string } | null>(null)
+
+  const idPending = idPendingData?.pending ?? []
 
   function handleRefresh() {
     refetchStats()
     refetchPayments()
     refetchAccess()
+    refetchIdPending()
+  }
+
+  async function handleVerifyId(userId: string, name: string, approve: boolean) {
+    try {
+      await verifyId({ userId, approve })
+      Alert.alert(approve ? 'Aprobado' : 'Rechazado', approve
+        ? `Identidad de ${name} verificada correctamente.`
+        : `Foto de ${name} rechazada. El usuario deberá subir una nueva.`)
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo procesar')
+    }
   }
 
   if (!isAdmin) {
@@ -386,6 +407,48 @@ export default function AdminScreen() {
               </View>
             )}
 
+            {/* Pending ID verifications */}
+            {idPending.length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 8 }}>
+                  <Text className="text-white font-bold text-base">Verificaciones de identidad</Text>
+                  <View style={{ backgroundColor: '#EF444420', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#EF444440' }}>
+                    <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '700' }}>{idPending.length} pendientes</Text>
+                  </View>
+                </View>
+                {idPending.map((u) => (
+                  <View key={u.id} style={{ backgroundColor: '#1E293B', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#EF444430' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EF444420', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 15 }}>{u.firstName[0]}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: 'white', fontWeight: '600', fontSize: 14 }}>{u.firstName} {u.lastName}</Text>
+                        <Text style={{ color: '#64748B', fontSize: 12 }}>{u.email}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity onPress={() => setPreviewPhoto({ uri: u.idPhotoUrl, name: `${u.firstName} ${u.lastName}` })}
+                      style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 12 }}>
+                      <Image source={{ uri: u.idPhotoUrl }} style={{ width: '100%', height: 160 }} resizeMode="cover" />
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: '#0F172A80', borderRadius: 6, padding: 4 }}>
+                        <Ionicons name="expand-outline" size={14} color="white" />
+                      </View>
+                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity onPress={() => handleVerifyId(u.id, `${u.firstName} ${u.lastName}`, false)}
+                        style={{ flex: 1, backgroundColor: '#EF444420', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#EF444440' }}>
+                        <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 13 }}>Rechazar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleVerifyId(u.id, `${u.firstName} ${u.lastName}`, true)}
+                        style={{ flex: 1, backgroundColor: '#10B98120', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#10B98140' }}>
+                        <Text style={{ color: '#10B981', fontWeight: '600', fontSize: 13 }}>Aprobar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
             {/* Admin Quick Actions */}
             <Text className="text-white font-bold text-base mt-2 mb-1">Gestión</Text>
             <TouchableOpacity
@@ -422,6 +485,23 @@ export default function AdminScreen() {
               <Ionicons name="chevron-forward" size={18} color="#475569" />
             </TouchableOpacity>
 
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/reports' as any)}
+              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
+              activeOpacity={0.75}
+            >
+              <View className="w-10 h-10 rounded-xl bg-cyan-500/20 items-center justify-center">
+                <Ionicons name="download-outline" size={20} color="#06B6D4" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base">Reportes CSV</Text>
+                <Text className="text-surface-muted text-xs mt-0.5">
+                  Accesos, pagos, reservaciones, visitantes
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+
             {isSuperAdmin && (
               <TouchableOpacity
                 onPress={() => router.push('/(app)/communities' as any)}
@@ -444,6 +524,21 @@ export default function AdminScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Full-screen photo preview modal */}
+      <Modal visible={!!previewPhoto} transparent animationType="fade" onRequestClose={() => setPreviewPhoto(null)}>
+        <View style={{ flex: 1, backgroundColor: '#000000EE', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <TouchableOpacity onPress={() => setPreviewPhoto(null)} style={{ position: 'absolute', top: 56, right: 20, zIndex: 10 }}>
+            <Ionicons name="close-circle" size={36} color="white" />
+          </TouchableOpacity>
+          {previewPhoto && (
+            <>
+              <Text style={{ color: 'white', fontWeight: '700', fontSize: 16, marginBottom: 16 }}>{previewPhoto.name}</Text>
+              <Image source={{ uri: previewPhoto.uri }} style={{ width: '100%', height: 400, borderRadius: 14 }} resizeMode="contain" />
+            </>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }

@@ -64,7 +64,8 @@
         {
           "faceIDPermission": "Chamanes uses Face ID for secure authentication."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false

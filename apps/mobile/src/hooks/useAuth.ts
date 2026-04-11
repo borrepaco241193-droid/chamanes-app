@@ -39,7 +39,11 @@ export function useLogin() {
         },
       )
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-      router.replace('/(app)/(tabs)')
+
+      // Redirect residents who haven't uploaded their ID yet
+      const isResidentRole = communityRole === 'RESIDENT' || (!communityRole && data.user.role === 'RESIDENT')
+      const needsIdVerification = isResidentRole && !(data.user as any).idPhotoUploaded
+      router.replace(needsIdVerification ? '/(app)/verify-identity' : '/(app)/(tabs)')
     },
   })
 }

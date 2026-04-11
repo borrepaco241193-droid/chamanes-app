@@ -65,6 +65,49 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     await service.changePassword(req.user.sub, currentPassword, newPassword)
     return reply.code(200).send({ message: 'Contraseña actualizada correctamente.' })
   })
+
+  // ── Upload official ID photo for identity verification ────
+  fastify.post('/upload-id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const userId = req.user.sub
+    const data = await req.file()
+    if (!data) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'No se recibió ningún archivo' })
+    }
+
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+    if (!allowedMime.includes(data.mimetype)) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Solo se aceptan imágenes (JPG, PNG, WEBP)' })
+    }
+
+    const chunks: Buffer[] = []
+    for await (const chunk of data.file) { chunks.push(chunk) }
+    const buffer = Buffer.concat(chunks)
+
+    let idPhotoUrl: string
+    const { env } = await import('../../config/env.js')
+
+    if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET_NAME && env.R2_ACCOUNT_ID) {
+      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
+      const s3 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+      })
+      const ext = data.mimetype.split('/')[1] ?? 'jpg'
+      const key = `id-photos/${userId}-${Date.now()}.${ext}`
+      await s3.send(new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: data.mimetype }))
+      idPhotoUrl = env.R2_PUBLIC_URL ? `${env.R2_PUBLIC_URL}/${key}` : `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${key}`
+    } else {
+      idPhotoUrl = `data:${data.mimetype};base64,${buffer.toString('base64')}`
+    }
+
+    await fastify.prisma.user.update({
+      where: { id: userId },
+      data: { idPhotoUrl, idVerified: false }, // reset to pending review
+    })
+
+    return reply.send({ ok: true, idPhotoUrl })
+  })
 }
 
 export default authRoutes
