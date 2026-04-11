@@ -15,6 +15,8 @@ import {
   addComment,
 } from './workorder.service.js'
 import { sendPushNotification } from '../notifications/notification.service.js'
+import { sendEmail, newWorkOrderEmail } from '../../lib/email.js'
+import { env } from '../../config/env.js'
 
 const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
   // POST — create
@@ -29,7 +31,92 @@ const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
         req.user.sub,
         body,
       )
+
+      // Email community admins — fire and forget
+      try {
+        const [community, adminUsers, reporter] = await Promise.all([
+          fastify.prisma.community.findUnique({
+            where: { id: req.params.communityId },
+            select: { name: true },
+          }),
+          fastify.prisma.communityUser.findMany({
+            where: {
+              communityId: req.params.communityId,
+              role: { in: [UserRole.COMMUNITY_ADMIN, UserRole.MANAGER] },
+            },
+            include: { user: { select: { email: true } } },
+          }),
+          fastify.prisma.user.findUnique({
+            where: { id: req.user.sub },
+            select: { firstName: true, lastName: true },
+          }),
+        ])
+        const reporterName = reporter ? `${reporter.firstName} ${reporter.lastName}` : 'Un residente'
+        for (const cu of adminUsers) {
+          if (cu.user.email) {
+            sendEmail({
+              to: cu.user.email,
+              subject: `Nueva orden de trabajo: ${order.title}`,
+              html: newWorkOrderEmail(order, community?.name ?? 'la comunidad', reporterName),
+            }).catch(() => {})
+          }
+        }
+      } catch { /* non-fatal */ }
+
       return reply.code(201).send(order)
+    },
+  )
+
+  // POST — upload photo
+  fastify.post<{ Params: { communityId: string; orderId: string } }>(
+    '/:communityId/work-orders/:orderId/photos',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      const data = await req.file()
+      if (!data) return reply.code(400).send({ message: 'No file uploaded' })
+
+      const buffer = await data.toBuffer()
+      const ext = data.filename.split('.').pop()?.toLowerCase() ?? 'jpg'
+      let photoUrl = ''
+
+      if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET_NAME && env.R2_ACCOUNT_ID) {
+        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
+        const s3 = new S3Client({
+          region: 'auto',
+          endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+        })
+        const key = `work-orders/${req.params.orderId}-${Date.now()}.${ext}`
+        await s3.send(new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: data.mimetype }))
+        photoUrl = env.R2_PUBLIC_URL ? `${env.R2_PUBLIC_URL}/${key}` : `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${key}`
+      } else {
+        photoUrl = `data:${data.mimetype};base64,${buffer.toString('base64')}`
+      }
+
+      const updated = await fastify.prisma.workOrder.update({
+        where: { id: req.params.orderId, communityId: req.params.communityId },
+        data: { imageUrls: { push: photoUrl } },
+      })
+      return reply.send({ ok: true, url: photoUrl, imageUrls: updated.imageUrls })
+    },
+  )
+
+  // DELETE — remove photo
+  fastify.delete<{ Params: { communityId: string; orderId: string }; Body: { url: string } }>(
+    '/:communityId/work-orders/:orderId/photos',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      const { url } = req.body as { url: string }
+      const order = await fastify.prisma.workOrder.findUnique({
+        where: { id: req.params.orderId, communityId: req.params.communityId },
+        select: { imageUrls: true },
+      })
+      if (!order) return reply.code(404).send({ message: 'Order not found' })
+      const updated = await fastify.prisma.workOrder.update({
+        where: { id: req.params.orderId, communityId: req.params.communityId },
+        data: { imageUrls: order.imageUrls.filter((u) => u !== url) },
+      })
+      return reply.send({ ok: true, imageUrls: updated.imageUrls })
     },
   )
 

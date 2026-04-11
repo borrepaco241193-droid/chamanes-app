@@ -9,6 +9,7 @@ import {
   cancelReservation,
 } from './reservation.service.js'
 import { sendPushNotification } from '../notifications/notification.service.js'
+import { sendEmail, newReservationEmail } from '../../lib/email.js'
 
 // ============================================================
 // Reservation Routes
@@ -74,6 +75,50 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
         req.user.sub,
         body,
       )
+
+      // Email admins + notify — fire and forget
+      try {
+        const [community, adminUsers, resident] = await Promise.all([
+          fastify.prisma.community.findUnique({
+            where: { id: req.params.communityId },
+            select: { name: true },
+          }),
+          fastify.prisma.communityUser.findMany({
+            where: {
+              communityId: req.params.communityId,
+              role: { in: [UserRole.COMMUNITY_ADMIN, UserRole.MANAGER] },
+            },
+            include: { user: { select: { email: true, id: true } } },
+          }),
+          fastify.prisma.user.findUnique({
+            where: { id: req.user.sub },
+            select: { firstName: true, lastName: true },
+          }),
+        ])
+        const residentName = resident ? `${resident.firstName} ${resident.lastName}` : 'Un residente'
+        const areaName = (reservation as any).commonArea?.name ?? 'Área común'
+
+        const adminIds = adminUsers.map((cu) => cu.user.id)
+        if (adminIds.length > 0) {
+          await sendPushNotification(fastify.prisma, {
+            userIds: adminIds,
+            title: 'Nueva reservación pendiente',
+            body: `${residentName} solicitó ${areaName}`,
+            type: 'reservation',
+          }).catch(() => {})
+        }
+
+        for (const cu of adminUsers) {
+          if (cu.user.email) {
+            sendEmail({
+              to: cu.user.email,
+              subject: `Nueva reservación: ${areaName}`,
+              html: newReservationEmail(reservation, community?.name ?? 'la comunidad', areaName, residentName),
+            }).catch(() => {})
+          }
+        }
+      } catch { /* non-fatal */ }
+
       return reply.code(201).send(reservation)
     },
   )

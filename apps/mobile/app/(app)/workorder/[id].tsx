@@ -10,17 +10,21 @@ import {
   Platform,
   Modal,
   FlatList,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
+import * as ImagePicker from 'expo-image-picker'
 import {
   useWorkOrder,
   useUpdateWorkOrderStatus,
   useAddComment,
   useStaffList,
   useAssignWorkOrder,
+  useUploadWorkOrderPhoto,
+  useRemoveWorkOrderPhoto,
 } from '../../../src/hooks/useWorkOrders'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { format } from 'date-fns'
@@ -91,11 +95,14 @@ export default function WorkOrderDetailScreen() {
   const { mutateAsync: updateStatus, isPending: isUpdating } = useUpdateWorkOrderStatus()
   const { mutateAsync: addComment, isPending: isCommenting } = useAddComment()
   const { mutateAsync: assignOrder, isPending: isAssigning } = useAssignWorkOrder()
+  const { mutateAsync: uploadPhoto, isPending: isUploading } = useUploadWorkOrderPhoto()
+  const { mutateAsync: removePhoto } = useRemoveWorkOrderPhoto()
   const { data: staffList } = useStaffList()
   const user = useAuthStore((s) => s.user)
 
   const [commentText, setCommentText] = useState('')
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
   const isAdmin =
     user?.role === 'SUPER_ADMIN' ||
@@ -104,6 +111,62 @@ export default function WorkOrderDetailScreen() {
     user?.communityRole === 'SUPER_ADMIN'
   const isStaff = user?.communityRole === 'STAFF'
   const canUpdateStatus = isAdmin || isStaff
+  const canEditPhotos = isAdmin || isStaff
+
+  // ── Photo handlers ────────────────────────────────────────
+
+  async function pickAndUpload(source: 'camera' | 'gallery') {
+    const permFn = source === 'camera'
+      ? ImagePicker.requestCameraPermissionsAsync
+      : ImagePicker.requestMediaLibraryPermissionsAsync
+    const { status } = await permFn()
+    if (status !== 'granted') {
+      Alert.alert('Permiso requerido', source === 'camera' ? 'Necesitamos acceso a la cámara.' : 'Necesitamos acceso a la galería.')
+      return
+    }
+
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ quality: 0.8, mediaTypes: ImagePicker.MediaTypeOptions.Images })
+      : await ImagePicker.launchImageLibraryAsync({ quality: 0.8, mediaTypes: ImagePicker.MediaTypeOptions.Images })
+
+    if (result.canceled || !result.assets[0]) return
+
+    const asset = result.assets[0]
+    const mimeType = asset.mimeType ?? 'image/jpeg'
+
+    try {
+      await uploadPhoto({ orderId: id, imageUri: asset.uri, mimeType })
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo subir la foto.')
+    }
+  }
+
+  function handleAddPhoto() {
+    Alert.alert('Agregar foto', undefined, [
+      { text: 'Cámara', onPress: () => pickAndUpload('camera') },
+      { text: 'Galería', onPress: () => pickAndUpload('gallery') },
+      { text: 'Cancelar', style: 'cancel' },
+    ])
+  }
+
+  function handleRemovePhoto(url: string) {
+    Alert.alert('Eliminar foto', '¿Seguro que deseas eliminar esta foto?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await removePhoto({ orderId: id, url })
+          } catch {
+            Alert.alert('Error', 'No se pudo eliminar la foto.')
+          }
+        },
+      },
+    ])
+  }
+
+  // ── Other handlers ────────────────────────────────────────
 
   async function handleAssign(staff: StaffMember) {
     setShowAssignModal(false)
@@ -179,6 +242,7 @@ export default function WorkOrderDetailScreen() {
   const priority = PRIORITY_CONFIG[order.priority] ?? PRIORITY_CONFIG.MEDIUM
   const categoryIcon = CATEGORY_ICONS[order.category] ?? 'construct-outline'
   const isActive = order.status !== 'COMPLETED' && order.status !== 'CANCELLED'
+  const photos = order.imageUrls ?? []
 
   return (
     <SafeAreaView className="flex-1 bg-surface">
@@ -263,6 +327,77 @@ export default function WorkOrderDetailScreen() {
                   a.staff?.user ? `${a.staff.user.firstName} ${a.staff.user.lastName}` : a.staff?.position ?? 'Personal'
                 ).join(', ')}
               />
+            )}
+          </View>
+
+          {/* Photos */}
+          <View className="mx-6 mb-4">
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text className="text-surface-muted text-xs font-medium uppercase tracking-wider">
+                Fotos {photos.length > 0 && `(${photos.length})`}
+              </Text>
+              {canEditPhotos && (
+                <TouchableOpacity
+                  onPress={handleAddPhoto}
+                  disabled={isUploading}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#3B82F620', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: '#3B82F640' }}
+                  activeOpacity={0.75}
+                >
+                  {isUploading
+                    ? <ActivityIndicator size="small" color="#3B82F6" />
+                    : <Ionicons name="camera-outline" size={15} color="#3B82F6" />
+                  }
+                  <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600' }}>
+                    {isUploading ? 'Subiendo...' : 'Agregar'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {photos.length === 0 ? (
+              <TouchableOpacity
+                onPress={canEditPhotos ? handleAddPhoto : undefined}
+                activeOpacity={canEditPhotos ? 0.75 : 1}
+                style={{
+                  height: 90, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed',
+                  borderColor: '#334155', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <Ionicons name="image-outline" size={28} color="#334155" />
+                <Text style={{ color: '#475569', fontSize: 12 }}>
+                  {canEditPhotos ? 'Toca para agregar fotos' : 'Sin fotos'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {photos.map((url, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setPreviewUrl(url)}
+                    activeOpacity={0.85}
+                    style={{ position: 'relative' }}
+                  >
+                    <Image
+                      source={{ uri: url }}
+                      style={{ width: 100, height: 100, borderRadius: 12, backgroundColor: '#1E293B' }}
+                      resizeMode="cover"
+                    />
+                    {canEditPhotos && (
+                      <TouchableOpacity
+                        onPress={() => handleRemovePhoto(url)}
+                        style={{
+                          position: 'absolute', top: 4, right: 4,
+                          backgroundColor: '#0F172ACC', borderRadius: 10,
+                          width: 20, height: 20, alignItems: 'center', justifyContent: 'center',
+                        }}
+                        hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+                      >
+                        <Ionicons name="close" size={12} color="white" />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
           </View>
 
@@ -373,7 +508,6 @@ export default function WorkOrderDetailScreen() {
         >
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
             <View style={{ backgroundColor: '#1E293B', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%' }}>
-              {/* Modal header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
                 <Text style={{ color: 'white', fontSize: 18, fontWeight: '700', flex: 1 }}>
                   Seleccionar personal
@@ -404,25 +538,14 @@ export default function WorkOrderDetailScreen() {
                         onPress={() => handleAssign(s)}
                         activeOpacity={0.75}
                         style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
+                          flexDirection: 'row', alignItems: 'center',
                           backgroundColor: isCurrentlyAssigned ? '#1E3A5F' : '#0F172A',
-                          borderRadius: 14,
-                          padding: 14,
-                          marginBottom: 8,
-                          borderWidth: 1,
-                          borderColor: isCurrentlyAssigned ? '#3B82F6' : '#334155',
-                          gap: 12,
+                          borderRadius: 14, padding: 14, marginBottom: 8,
+                          borderWidth: 1, borderColor: isCurrentlyAssigned ? '#3B82F6' : '#334155', gap: 12,
                         }}
                       >
-                        <View style={{
-                          width: 42, height: 42, borderRadius: 21,
-                          backgroundColor: '#334155',
-                          alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>
-                            {name[0]?.toUpperCase()}
-                          </Text>
+                        <View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: '#334155', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>{name[0]?.toUpperCase()}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: 'white', fontWeight: '600', fontSize: 15 }}>{name}</Text>
@@ -445,6 +568,25 @@ export default function WorkOrderDetailScreen() {
                 />
               )}
             </View>
+          </View>
+        </Modal>
+
+        {/* Photo preview modal */}
+        <Modal visible={!!previewUrl} transparent animationType="fade" onRequestClose={() => setPreviewUrl(null)}>
+          <View style={{ flex: 1, backgroundColor: '#000000EE', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <TouchableOpacity
+              onPress={() => setPreviewUrl(null)}
+              style={{ position: 'absolute', top: 56, right: 20, zIndex: 10 }}
+            >
+              <Ionicons name="close-circle" size={36} color="white" />
+            </TouchableOpacity>
+            {previewUrl && (
+              <Image
+                source={{ uri: previewUrl }}
+                style={{ width: '100%', height: 400, borderRadius: 14 }}
+                resizeMode="contain"
+              />
+            )}
           </View>
         </Modal>
 

@@ -90,3 +90,27 @@ export function useAddComment() {
     },
   })
 }
+
+export function useUploadWorkOrderPhoto() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, imageUri, mimeType }: { orderId: string; imageUri: string; mimeType: string }) =>
+      workOrderService.uploadPhoto(communityId, orderId, imageUri, mimeType),
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
+    },
+  })
+}
+
+export function useRemoveWorkOrderPhoto() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, url }: { orderId: string; url: string }) =>
+      workOrderService.removePhoto(communityId, orderId, url),
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
+    },
+  })
+}

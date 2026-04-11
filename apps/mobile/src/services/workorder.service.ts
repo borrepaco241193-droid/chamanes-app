@@ -16,6 +16,7 @@ export interface WorkOrder {
   completedAt?: string
   reportedById?: string
   createdAt: string
+  imageUrls?: string[]
   assignments?: { staffId: string; staff: any }[]
   comments?: WorkOrderComment[]
   _count?: { comments: number }
@@ -88,6 +89,32 @@ export const workOrderService = {
   ): Promise<WorkOrderComment> {
     const res = await api.post(`/communities/${communityId}/work-orders/${orderId}/comments`, {
       body,
+    })
+    return res.data
+  },
+
+  async uploadPhoto(
+    communityId: string,
+    orderId: string,
+    imageUri: string,
+    mimeType: string,
+  ): Promise<{ ok: boolean; url: string; imageUrls: string[] }> {
+    const formData = new FormData()
+    const ext = imageUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    formData.append('file', { uri: imageUri, type: mimeType, name: `photo-${Date.now()}.${ext}` } as any)
+    const res = await api.post(`/communities/${communityId}/work-orders/${orderId}/photos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+  },
+
+  async removePhoto(
+    communityId: string,
+    orderId: string,
+    url: string,
+  ): Promise<{ ok: boolean; imageUrls: string[] }> {
+    const res = await api.delete(`/communities/${communityId}/work-orders/${orderId}/photos`, {
+      data: { url },
     })
     return res.data
   },
