@@ -40,7 +40,8 @@ const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
     '/:communityId/work-orders',
     { preHandler: [fastify.authenticate] },
     async (req, reply) => {
-      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]
+      // GUARD and MANAGER see all work orders, same as COMMUNITY_ADMIN
+      const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER, UserRole.GUARD] as string[]
       let isAdmin = ADMIN_ROLES.includes(req.user.communityRole ?? req.user.role) || req.user.role === UserRole.SUPER_ADMIN
       if (!isAdmin) {
         const cu = await fastify.prisma.communityUser.findUnique({

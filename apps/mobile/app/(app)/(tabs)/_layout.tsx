@@ -94,12 +94,11 @@ export default function TabsLayout() {
         }}
       />
 
-      {/* Work Orders — not guards */}
+      {/* Work Orders — all roles except guard hidden previously, now visible to guard+staff too */}
       <Tabs.Screen
         name="workorders"
         options={{
           title: 'Tareas',
-          href: isGuard ? null : undefined,
           tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'construct' : 'construct-outline'} focused={focused} />,
         }}
       />

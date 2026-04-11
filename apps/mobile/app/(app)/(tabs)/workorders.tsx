@@ -123,9 +123,11 @@ export default function WorkOrdersScreen() {
     user?.role === 'SUPER_ADMIN' ||
     user?.communityRole === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'MANAGER' ||
-    user?.communityRole === 'SUPER_ADMIN'
+    user?.communityRole === 'SUPER_ADMIN' ||
+    user?.communityRole === 'GUARD'
   const isStaff = user?.communityRole === 'STAFF'
-  const canCreate = !isStaff // residents and admins can report issues
+  const isGuard = user?.communityRole === 'GUARD'
+  const canCreate = !isGuard // guards view only; residents, staff and admins can report
 
   return (
     <SafeAreaView className="flex-1 bg-surface">

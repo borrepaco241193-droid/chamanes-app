@@ -474,6 +474,135 @@ async function main() {
   }
   console.log(`✅ 6 work orders created (2 OPEN urgent, 2 OPEN medium/low, 1 ASSIGNED, 1 IN_PROGRESS)`)
 
+  // ── Demo Notifications (for communityAdmin to see all types) ─
+  console.log('🔔 Creating demo notifications...')
+  const notifTargets = [communityAdmin.id, mgr.id, createdResidents[0].id]
+
+  const demoNotifs = [
+    // visitor_arrived — most recent, unread
+    {
+      userId: communityAdmin.id,
+      title: 'Visita en puerta',
+      body: 'Juan Pérez ha llegado · Creado por Carlos López (A101)',
+      type: 'visitor_arrived',
+      data: { passId: 'demo', visitorName: 'Juan Pérez' },
+      isRead: false,
+      createdAt: hoursAgo(1),
+    },
+    // payment_due — unread
+    {
+      userId: communityAdmin.id,
+      title: 'Pago pendiente detectado',
+      body: '10 residentes tienen cuota de mantenimiento vencida este mes',
+      type: 'payment_due',
+      data: { count: '10' },
+      isRead: false,
+      createdAt: hoursAgo(3),
+    },
+    // reservation_confirmed
+    {
+      userId: communityAdmin.id,
+      title: 'Reservación confirmada',
+      body: 'Salón de Fiestas · Sábado 14 Abr 14:00–18:00 · Carlos López',
+      type: 'reservation_confirmed',
+      data: { reservationId: 'demo' },
+      isRead: false,
+      createdAt: hoursAgo(5),
+    },
+    // work_order — urgent
+    {
+      userId: communityAdmin.id,
+      title: 'Orden de trabajo URGENTE',
+      body: 'Fuga de agua en baño — Unidad A101. Requiere atención inmediata.',
+      type: 'work_order',
+      data: { priority: 'URGENT' },
+      isRead: false,
+      createdAt: hoursAgo(8),
+    },
+    // announcement
+    {
+      userId: communityAdmin.id,
+      title: 'Aviso de comunidad',
+      body: 'Corte de agua programado el 15 de Abril de 9:00 a 13:00 hrs para mantenimiento de red.',
+      type: 'announcement',
+      data: {},
+      isRead: true,
+      createdAt: daysAgo(1),
+    },
+    // payment_confirmed — read
+    {
+      userId: communityAdmin.id,
+      title: 'Pago recibido',
+      body: 'María Hernández realizó pago de $1,500 MXN · Cuota Abril 2026',
+      type: 'payment_confirmed',
+      data: { amount: '1500', currency: 'MXN' },
+      isRead: true,
+      createdAt: daysAgo(2),
+    },
+    // visitor para el residente #1
+    {
+      userId: createdResidents[0].id,
+      title: 'Visita en puerta',
+      body: 'Técnico Telmex ha llegado a tu unidad',
+      type: 'visitor_arrived',
+      data: { visitorName: 'Técnico Telmex' },
+      isRead: false,
+      createdAt: hoursAgo(2),
+    },
+    // payment_due para residente
+    {
+      userId: createdResidents[0].id,
+      title: 'Cuota pendiente',
+      body: 'Tu cuota de mantenimiento de Abril 2026 ($1,500) vence el día 5. Evita cargos adicionales.',
+      type: 'payment_due',
+      data: { amount: '1500', dueDate: '2026-04-05' },
+      isRead: false,
+      createdAt: hoursAgo(12),
+    },
+    // reservation_confirmed para residente
+    {
+      userId: createdResidents[0].id,
+      title: 'Reservación confirmada',
+      body: 'Tu reservación del Salón de Fiestas fue aprobada por la administración.',
+      type: 'reservation_confirmed',
+      data: {},
+      isRead: true,
+      createdAt: daysAgo(3),
+    },
+    // work_order para manager
+    {
+      userId: mgr.id,
+      title: 'Nueva orden de trabajo',
+      body: 'Puerta de acceso no cierra correctamente — Entrada principal. Prioridad ALTA.',
+      type: 'work_order',
+      data: { priority: 'HIGH' },
+      isRead: false,
+      createdAt: hoursAgo(4),
+    },
+  ]
+
+  for (const n of demoNotifs) {
+    // Avoid duplicates on re-seed by checking title+userId+type
+    const existing = await prisma.notification.findFirst({
+      where: { userId: n.userId, title: n.title, type: n.type },
+    })
+    if (!existing) {
+      await prisma.notification.create({
+        data: {
+          userId:    n.userId,
+          title:     n.title,
+          body:      n.body,
+          type:      n.type,
+          data:      n.data,
+          isRead:    n.isRead,
+          readAt:    n.isRead ? n.createdAt : null,
+          createdAt: n.createdAt,
+        },
+      })
+    }
+  }
+  console.log(`✅ ${demoNotifs.length} demo notifications created (${notifTargets.length} users)`)
+
   // ── Summary ───────────────────────────────────────────────
   console.log('\n🎉 Seed complete!\n')
   console.log('═══════════════════════════════════════════')
