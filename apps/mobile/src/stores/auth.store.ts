@@ -96,7 +96,17 @@ export const useAuthStore = create<AuthState>()(
       name: 'chamanes-auth',
       storage: createJSONStorage(() => secureStorage),
       onRehydrateStorage: () => (state) => {
-        state?.setHydrated()
+        if (state) {
+          state.setHydrated()
+          // Fix existing sessions that were persisted before activeCommunityIds was added
+          if (state.activeCommunityIds.length === 0 && state.user) {
+            const allIds = state.user.communities?.map((c) => c.id)
+              ?? (state.user.communityId ? [state.user.communityId] : [])
+            if (allIds.length > 0) {
+              state.activeCommunityIds = allIds
+            }
+          }
+        }
       },
       // Only persist the token and user — not actions
       partialize: (state) => ({

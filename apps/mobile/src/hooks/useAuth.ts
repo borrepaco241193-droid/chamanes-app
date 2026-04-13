@@ -115,7 +115,7 @@ export function useChangeEmail() {
 }
 
 export function useMe() {
-  const { isAuthenticated, user, setUser } = useAuthStore()
+  const { isAuthenticated, user, setUser, activeCommunityIds, selectAllCommunities } = useAuthStore()
   return useQuery({
     queryKey: ['me'],
     queryFn: async () => {
@@ -123,7 +123,14 @@ export function useMe() {
       // Sync fresh communities to the auth store so multi-community switcher works
       const freshCommunities = (result as any).communities
       if (user && Array.isArray(freshCommunities) && freshCommunities.length > 0) {
-        setUser({ ...user, communities: freshCommunities })
+        const updatedUser = { ...user, communities: freshCommunities }
+        setUser(updatedUser)
+        // Initialize activeCommunityIds if still empty (existing sessions before feature was added)
+        if (activeCommunityIds.length === 0) {
+          useAuthStore.setState({
+            activeCommunityIds: freshCommunities.map((c: any) => c.id),
+          })
+        }
       }
       return result
     },
