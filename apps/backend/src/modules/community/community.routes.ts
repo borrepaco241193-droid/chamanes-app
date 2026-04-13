@@ -38,6 +38,7 @@ const communityRoutes: FastifyPluginAsync = async (fastify) => {
       const { search } = req.query
       const communities = await fastify.prisma.community.findMany({
         where: {
+          isActive: true,
           ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
         },
         orderBy: { name: 'asc' },
