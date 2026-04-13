@@ -76,17 +76,17 @@ export class AuthService {
     // Determine active community context
     let activeCommunity = user.communityUsers[0]
 
-    // SUPER_ADMIN may have no CommunityUser rows — auto-pick the first community
-    // so communityId is always set in the token and the mobile gets gate buttons
+    // SUPER_ADMIN may have no CommunityUser rows — fetch all communities for context
     let superAdminCommunityId: string | undefined
-    if (!activeCommunity && user.globalRole === 'SUPER_ADMIN') {
-      const firstCommunity = await this.prisma.community.findFirst({
+    let superAdminCommunities: Array<{ id: string; name: string; logoUrl: string | null }> = []
+    if (user.globalRole === 'SUPER_ADMIN' && user.communityUsers.length === 0) {
+      superAdminCommunities = await this.prisma.community.findMany({
         where: { isActive: true },
         orderBy: { createdAt: 'asc' },
         select: { id: true, name: true, logoUrl: true },
       })
-      if (firstCommunity) {
-        superAdminCommunityId = firstCommunity.id
+      if (superAdminCommunities.length > 0) {
+        superAdminCommunityId = superAdminCommunities[0].id
       }
     }
 
@@ -143,12 +143,19 @@ export class AuthService {
         communityRole: activeCommunity?.role,
         idVerified: user.idVerified,
         idPhotoUploaded: !!user.idPhotoUrl,
-        communities: user.communityUsers.map((cu) => ({
-          id: cu.communityId,
-          name: cu.community.name,
-          logoUrl: cu.community.logoUrl,
-          role: cu.role,
-        })),
+        communities: user.communityUsers.length > 0
+          ? user.communityUsers.map((cu) => ({
+              id: cu.communityId,
+              name: cu.community.name,
+              logoUrl: cu.community.logoUrl,
+              role: cu.role,
+            }))
+          : superAdminCommunities.map((c) => ({
+              id: c.id,
+              name: c.name,
+              logoUrl: c.logoUrl,
+              role: 'SUPER_ADMIN' as any,
+            })),
       },
     }
   }
@@ -321,6 +328,24 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     })
+  }
+
+  // ── Change Email ──────────────────────────────────────────
+  async changeEmail(userId: string, newEmail: string, currentPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 })
+
+    const match = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!match) {
+      throw Object.assign(new Error('La contraseña actual es incorrecta'), { statusCode: 400 })
+    }
+
+    const existing = await this.prisma.user.findUnique({ where: { email: newEmail } })
+    if (existing && existing.id !== userId) {
+      throw Object.assign(new Error('Este correo ya está en uso por otra cuenta'), { statusCode: 409 })
+    }
+
+    await this.prisma.user.update({ where: { id: userId }, data: { email: newEmail } })
   }
 
   // ── Verify Email ──────────────────────────────────────────

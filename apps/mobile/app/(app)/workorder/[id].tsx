@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker'
 import {
   useWorkOrder,
   useUpdateWorkOrderStatus,
+  useUpdateWorkOrder,
   useAddComment,
   useStaffList,
   useAssignWorkOrder,
@@ -93,6 +94,7 @@ export default function WorkOrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data: order, isLoading } = useWorkOrder(id)
   const { mutateAsync: updateStatus, isPending: isUpdating } = useUpdateWorkOrderStatus()
+  const { mutateAsync: updateOrder } = useUpdateWorkOrder()
   const { mutateAsync: addComment, isPending: isCommenting } = useAddComment()
   const { mutateAsync: assignOrder, isPending: isAssigning } = useAssignWorkOrder()
   const { mutateAsync: uploadPhoto, isPending: isUploading } = useUploadWorkOrderPhoto()
@@ -400,6 +402,42 @@ export default function WorkOrderDetailScreen() {
               </View>
             )}
           </View>
+
+          {/* Priority section — admin only */}
+          {isAdmin && isActive && (
+            <View className="mx-6 mb-4">
+              <Text className="text-surface-muted text-xs font-medium uppercase tracking-wider mb-2">
+                Prioridad
+              </Text>
+              <View className="flex-row gap-2">
+                {[
+                  { value: 'LOW',    label: 'Baja',    activeColor: '#64748B', activeBg: '#64748B20' },
+                  { value: 'MEDIUM', label: 'Media',   activeColor: '#F59E0B', activeBg: '#F59E0B20' },
+                  { value: 'HIGH',   label: 'Alta',    activeColor: '#F97316', activeBg: '#F97316 20' },
+                  { value: 'URGENT', label: '🚨 URG',  activeColor: '#EF4444', activeBg: '#EF444420' },
+                ].map((p) => {
+                  const isSelected = order.priority === p.value
+                  return (
+                    <TouchableOpacity
+                      key={p.value}
+                      onPress={() => updateOrder({ orderId: id, data: { priority: p.value } })}
+                      style={{
+                        flex: 1, paddingVertical: 8, borderRadius: 12, alignItems: 'center',
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? p.activeColor : '#334155',
+                        backgroundColor: isSelected ? p.activeBg : '#1E293B',
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? p.activeColor : '#64748B' }}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            </View>
+          )}
 
           {/* Assign section — admin/manager only */}
           {isAdmin && isActive && (

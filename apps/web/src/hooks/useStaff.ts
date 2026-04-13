@@ -1,0 +1,150 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@/store/auth.store'
+import api from '@/lib/api'
+
+export function useCreateStaff() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (body: object) =>
+      api.post(`/communities/${activeCommunityId}/residents`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['staff', activeCommunityId] }),
+  })
+}
+
+export function useDeleteStaff() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api.delete(`/communities/${activeCommunityId}/residents/${userId}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['staff', activeCommunityId] }),
+  })
+}
+
+export function useStaff() {
+  const { activeCommunityId } = useAuthStore()
+  return useQuery({
+    queryKey: ['staff', activeCommunityId],
+    queryFn: async () => {
+      const { data } = await api.get(`/communities/${activeCommunityId}/staff`)
+      return data.staff ?? data
+    },
+    enabled: !!activeCommunityId,
+  })
+}
+
+export function useWorkOrders(status?: string) {
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+
+  return useQuery({
+    queryKey: ['workorders', ids, status],
+    queryFn: async () => {
+      const params = status && status !== 'ALL' ? `?status=${status}` : ''
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/work-orders${params}`)
+        return data.orders ?? data.workOrders ?? data
+      }
+      // Multi-community merge
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/work-orders${params}`).then((r) => r.data))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = results.flatMap((r) => r.orders ?? r.workOrders ?? [])
+      merged.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return merged
+    },
+    enabled: ids.length > 0,
+  })
+}
+
+export function useCreateWorkOrder() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (body: object) =>
+      api.post(`/communities/${activeCommunityId}/work-orders`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workorders', activeCommunityId] }),
+  })
+}
+
+export function useUpdateWorkOrder() {
+  const qc = useQueryClient()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const fallbackId = activeCommunityId ?? activeCommunityIds[0]
+  return useMutation({
+    mutationFn: ({ id, body, communityId }: { id: string; body: object; communityId?: string }) =>
+      api.patch(`/communities/${communityId ?? fallbackId}/work-orders/${id}`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workorders'] }),
+  })
+}
+
+export function useCreateVisitorPass() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (body: object) =>
+      api.post(`/communities/${activeCommunityId}/visitors`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['visitors', activeCommunityId] }),
+  })
+}
+
+export function useRevokeVisitorPass() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (passId: string) =>
+      api.patch(`/communities/${activeCommunityId}/visitors/${passId}/revoke`, {}).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['visitors', activeCommunityId] }),
+  })
+}
+
+export function useVisitorPasses(status?: string) {
+  const { activeCommunityId } = useAuthStore()
+  return useQuery({
+    queryKey: ['visitors', activeCommunityId, status],
+    queryFn: async () => {
+      const params = status && status !== 'ALL' ? `?status=${status}` : ''
+      const { data } = await api.get(`/communities/${activeCommunityId}/visitors${params}`)
+      return data.passes ?? data
+    },
+    enabled: !!activeCommunityId,
+  })
+}
+
+export function useAccessEvents(limit = 50) {
+  const { activeCommunityId } = useAuthStore()
+  return useQuery({
+    queryKey: ['access-events', activeCommunityId, limit],
+    queryFn: async () => {
+      const { data } = await api.get(`/communities/${activeCommunityId}/gate/events?limit=${limit}`)
+      return data.events ?? data
+    },
+    enabled: !!activeCommunityId,
+  })
+}
+
+export function useIdVerifications(status = 'ALL') {
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
+  return useQuery({
+    queryKey: ['id-verifications', communityId, status],
+    queryFn: async () => {
+      const { data } = await api.get(`/communities/${communityId}/admin/id-verifications?status=${status}`)
+      return data.verifications ?? data.users ?? data
+    },
+    enabled: !!communityId,
+  })
+}
+
+export function useVerifyId() {
+  const qc = useQueryClient()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
+  return useMutation({
+    mutationFn: ({ userId, approve, note }: { userId: string; approve: boolean; note?: string }) =>
+      api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve, note }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['id-verifications', communityId] }),
+  })
+}

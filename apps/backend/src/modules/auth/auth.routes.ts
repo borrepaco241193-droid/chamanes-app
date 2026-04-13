@@ -8,7 +8,23 @@ import {
   refreshTokenSchema,
   verifyEmailSchema,
   changePasswordSchema,
+  changeEmailSchema,
 } from './auth.schema.js'
+
+// Validate with Zod and return 400 directly so the global error handler is bypassed
+// Uses name/issues checks instead of instanceof to avoid ESM cross-module boundary issues
+function validate<T>(schema: { parse: (v: unknown) => T }, data: unknown, reply: any): T | null {
+  try {
+    return schema.parse(data)
+  } catch (err: any) {
+    const isZod = err?.name === 'ZodError' || Array.isArray(err?.issues)
+    if (isZod) {
+      reply.code(400).send({ error: 'Validation Error', message: 'Invalid request data', details: err.issues ?? [] })
+      return null
+    }
+    throw err
+  }
+}
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   const service = new AuthService(fastify.prisma, fastify.redis)
@@ -20,12 +36,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
-    const body = registerSchema.parse(req.body)
+    const body = validate(registerSchema, req.body, reply)
+    if (!body) return
     const result = await service.register(body)
     return reply.code(201).send({ data: result, message: 'Account created. Please verify your email.' })
   })
 
-  fastify.post('/refresh', async (req, reply) => {
+  fastify.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (req, reply) => {
     const { refreshToken } = refreshTokenSchema.parse(req.body)
     const result = await service.refresh(refreshToken)
     return reply.code(200).send({ data: result })
@@ -39,7 +56,26 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/me', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const user = await service.getMe(req.user.sub)
-    return reply.code(200).send({ data: user })
+    const communityUsers = (user as any).communityUsers ?? []
+    let communities: any[]
+    if (communityUsers.length > 0) {
+      communities = communityUsers.map((cu: any) => ({
+        id: cu.communityId,
+        name: cu.community.name,
+        logoUrl: cu.community.logoUrl ?? null,
+        role: cu.role,
+      }))
+    } else if (req.user.role === 'SUPER_ADMIN') {
+      const allCommunities = await fastify.prisma.community.findMany({
+        where: { isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, logoUrl: true },
+      })
+      communities = allCommunities.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logoUrl ?? null, role: 'SUPER_ADMIN' }))
+    } else {
+      communities = []
+    }
+    return reply.code(200).send({ data: { ...user, communities } })
   })
 
   fastify.post('/forgot-password', { config: { rateLimit: { max: 3, timeWindow: '5 minutes' } } }, async (req, reply) => {
@@ -48,26 +84,53 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send({ message: 'If that email exists, a reset link has been sent.' })
   })
 
-  fastify.post('/reset-password', async (req, reply) => {
-    const body = resetPasswordSchema.parse(req.body)
+  fastify.post('/reset-password', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (req, reply) => {
+    const body = validate(resetPasswordSchema, req.body, reply)
+    if (!body) return
     await service.resetPassword(body)
     return reply.code(200).send({ message: 'Password reset successfully. Please log in.' })
   })
 
-  fastify.post('/verify-email', async (req, reply) => {
+  fastify.post('/verify-email', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (req, reply) => {
     const { token } = verifyEmailSchema.parse(req.body)
     await service.verifyEmail(token)
     return reply.code(200).send({ message: 'Email verified successfully.' })
   })
 
-  fastify.post('/change-password', { preHandler: [fastify.authenticate] }, async (req, reply) => {
-    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body)
-    await service.changePassword(req.user.sub, currentPassword, newPassword)
+  fastify.post('/change-password', { preHandler: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req, reply) => {
+    const parsed = validate(changePasswordSchema, req.body, reply)
+    if (!parsed) return
+    await service.changePassword(req.user.sub, parsed.currentPassword, parsed.newPassword)
     return reply.code(200).send({ message: 'Contraseña actualizada correctamente.' })
   })
 
-  // ── Upload official ID photo for identity verification ────
-  fastify.post('/upload-id', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+  fastify.post('/change-email', { preHandler: [fastify.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (req, reply) => {
+    const parsed = validate(changeEmailSchema, req.body, reply)
+    if (!parsed) return
+    await service.changeEmail(req.user.sub, parsed.newEmail, parsed.currentPassword)
+    return reply.code(200).send({ message: 'Correo actualizado correctamente.' })
+  })
+
+  // ── Update own profile (name/phone) ──────────────────────
+  fastify.patch('/me', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const body = (req.body ?? {}) as any
+    const updates: any = {}
+    if (typeof body.firstName === 'string' && body.firstName.trim()) updates.firstName = body.firstName.trim()
+    if (typeof body.lastName  === 'string' && body.lastName.trim())  updates.lastName  = body.lastName.trim()
+    if (typeof body.phone     === 'string')                          updates.phone     = body.phone.trim() || null
+    if (Object.keys(updates).length === 0) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'No hay campos para actualizar' })
+    }
+    const updated = await fastify.prisma.user.update({
+      where: { id: req.user.sub },
+      data: updates,
+      select: { id: true, firstName: true, lastName: true, phone: true, email: true, avatarUrl: true },
+    })
+    return reply.send({ ok: true, user: updated })
+  })
+
+  // ── Upload profile avatar ─────────────────────────────────
+  fastify.post('/upload-avatar', { preHandler: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (req, reply) => {
     const userId = req.user.sub
     const data = await req.file()
     if (!data) {
@@ -79,8 +142,67 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'BadRequest', message: 'Solo se aceptan imágenes (JPG, PNG, WEBP)' })
     }
 
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
     const chunks: Buffer[] = []
-    for await (const chunk of data.file) { chunks.push(chunk) }
+    let totalSize = 0
+    for await (const chunk of data.file) {
+      totalSize += chunk.length
+      if (totalSize > MAX_FILE_SIZE) {
+        return reply.code(413).send({ error: 'PayloadTooLarge', message: 'La imagen no puede superar 5 MB' })
+      }
+      chunks.push(chunk)
+    }
+    const buffer = Buffer.concat(chunks)
+
+    let avatarUrl: string
+    const { env } = await import('../../config/env.js')
+
+    if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET_NAME && env.R2_ACCOUNT_ID) {
+      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3')
+      const s3 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+      })
+      const ext = data.mimetype.split('/')[1] ?? 'jpg'
+      const key = `avatars/${userId}-${Date.now()}.${ext}`
+      await s3.send(new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: data.mimetype }))
+      avatarUrl = env.R2_PUBLIC_URL ? `${env.R2_PUBLIC_URL}/${key}` : `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${key}`
+    } else {
+      avatarUrl = `data:${data.mimetype};base64,${buffer.toString('base64')}`
+    }
+
+    await fastify.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    })
+
+    return reply.send({ ok: true, avatarUrl })
+  })
+
+  // ── Upload official ID photo for identity verification ────
+  fastify.post('/upload-id', { preHandler: [fastify.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (req, reply) => {
+    const userId = req.user.sub
+    const data = await req.file()
+    if (!data) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'No se recibió ningún archivo' })
+    }
+
+    const allowedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+    if (!allowedMime.includes(data.mimetype)) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Solo se aceptan imágenes (JPG, PNG, WEBP)' })
+    }
+
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
+    const chunks: Buffer[] = []
+    let totalSize = 0
+    for await (const chunk of data.file) {
+      totalSize += chunk.length
+      if (totalSize > MAX_FILE_SIZE) {
+        return reply.code(413).send({ error: 'PayloadTooLarge', message: 'La imagen no puede superar 5 MB' })
+      }
+      chunks.push(chunk)
+    }
     const buffer = Buffer.concat(chunks)
 
     let idPhotoUrl: string
@@ -103,7 +225,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     await fastify.prisma.user.update({
       where: { id: userId },
-      data: { idPhotoUrl, idVerified: false }, // reset to pending review
+      data: { idPhotoUrl, idVerified: false, idVerificationStatus: 'PENDING' },
     })
 
     return reply.send({ ok: true, idPhotoUrl })

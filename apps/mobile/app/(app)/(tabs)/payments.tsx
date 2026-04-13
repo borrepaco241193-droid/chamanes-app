@@ -5,13 +5,13 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Linking,
   Alert,
 } from 'react-native'
+// Stripe is a native module — imported dynamically to avoid crashing in Expo Go
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { usePayments, useCheckout, useGenerateFees } from '../../../src/hooks/usePayments'
+import { usePayments, usePaymentIntent, useGenerateFees } from '../../../src/hooks/usePayments'
 import { useMarkPaid, useUploadTransferProof } from '../../../src/hooks/useResidents'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import * as ImagePicker from 'expo-image-picker'
@@ -99,7 +99,7 @@ function PaymentCard({ payment, onPay, onMarkPaid, isAdmin }: { payment: Payment
               className="bg-primary-500 px-5 py-2.5 rounded-xl"
               activeOpacity={0.8}
             >
-              <Text className="text-white font-semibold text-sm">Pagar online</Text>
+              <Text className="text-white font-semibold text-sm">Pagar</Text>
             </TouchableOpacity>
             {isAdmin && onMarkPaid && (
               <TouchableOpacity
@@ -130,7 +130,7 @@ function PaymentCard({ payment, onPay, onMarkPaid, isAdmin }: { payment: Payment
 export default function PaymentsScreen() {
   const [filter, setFilter] = useState<PaymentStatus | undefined>(undefined)
   const { data, isLoading, refetch, isRefetching } = usePayments(filter)
-  const { mutateAsync: getCheckout } = useCheckout()
+  const { mutateAsync: getPaymentIntentMutation } = usePaymentIntent()
   const { mutateAsync: markPaid } = useMarkPaid()
   const { mutateAsync: uploadProof } = useUploadTransferProof()
   const { mutateAsync: generateFees, isPending: isGenerating } = useGenerateFees()
@@ -218,17 +218,65 @@ export default function PaymentsScreen() {
   async function handlePay(paymentId: string) {
     setPayingId(paymentId)
     try {
-      const { checkoutUrl } = await getCheckout(paymentId)
-      await Linking.openURL(checkoutUrl)
-      // After returning from browser, prompt to refresh
-      Alert.alert(
-        'Pago iniciado',
-        'Si completaste el pago, toca Actualizar para ver el estado.',
-        [
-          { text: 'Actualizar', onPress: () => refetch() },
-          { text: 'Cerrar', style: 'cancel' },
-        ],
-      )
+      // 1. Get payment intent from backend
+      const { clientSecret, publishableKey } = await getPaymentIntentMutation(paymentId)
+
+      // 2. Load Stripe native module dynamically (not available in Expo Go)
+      let stripeModule: typeof import('@stripe/stripe-react-native')
+      try {
+        stripeModule = await import('@stripe/stripe-react-native')
+      } catch {
+        Alert.alert(
+          'Pagos no disponibles',
+          'El pago nativo requiere la app instalada. En modo desarrollo usa la versión de prueba.',
+          [{ text: 'OK' }],
+        )
+        return
+      }
+      const { initStripe, initPaymentSheet, presentPaymentSheet } = stripeModule
+
+      // 3. Initialize Stripe with the key provided by the server
+      await initStripe({ publishableKey, merchantIdentifier: 'merchant.app.chamanes' })
+
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'Chamanes',
+        defaultBillingDetails: {},
+        appearance: {
+          colors: {
+            primary: '#3B82F6',
+            background: '#0F172A',
+            componentBackground: '#1E293B',
+            componentBorder: '#334155',
+            componentDivider: '#334155',
+            primaryText: '#FFFFFF',
+            secondaryText: '#94A3B8',
+            componentText: '#FFFFFF',
+            placeholderText: '#64748B',
+            icon: '#94A3B8',
+            error: '#EF4444',
+          },
+        },
+      })
+
+      if (initError) {
+        Alert.alert('Error', initError.message ?? 'No se pudo inicializar el pago')
+        return
+      }
+
+      // 5. Present the Payment Sheet
+      const { error: payError } = await presentPaymentSheet()
+
+      if (payError) {
+        if (payError.code !== 'Canceled') {
+          Alert.alert('Pago fallido', payError.message ?? 'El pago no pudo completarse')
+        }
+        return
+      }
+
+      // 6. Success — webhook will confirm asynchronously; poll once
+      await refetch()
+      Alert.alert('¡Pago enviado!', 'Tu pago está siendo procesado. El estado se actualizará en breve.', [{ text: 'OK' }])
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? 'No se pudo iniciar el pago'
       const isUnavailable = err?.response?.status === 503

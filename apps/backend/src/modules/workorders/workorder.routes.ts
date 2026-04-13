@@ -165,6 +165,54 @@ const workOrderRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // PATCH — general update (priority, status, title, location, dueDate)
+  fastify.patch<{ Params: { communityId: string; orderId: string }; Body: unknown }>(
+    '/:communityId/work-orders/:orderId',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      const body = (req.body ?? {}) as any
+      const updates: any = {}
+      if (body.status && ['OPEN','ASSIGNED','IN_PROGRESS','COMPLETED','CANCELLED'].includes(body.status)) updates.status = body.status
+      if (body.priority && ['LOW','MEDIUM','HIGH','URGENT'].includes(body.priority)) updates.priority = body.priority
+      if (typeof body.title === 'string' && body.title.trim()) updates.title = body.title.trim()
+      if (typeof body.description === 'string' && body.description.trim()) updates.description = body.description.trim()
+      if (typeof body.location === 'string') updates.location = body.location || null
+      if (body.dueDate !== undefined) updates.dueDate = body.dueDate ? new Date(body.dueDate) : null
+      if (updates.status === 'COMPLETED') updates.completedAt = new Date()
+
+      if (Object.keys(updates).length === 0) {
+        return reply.code(400).send({ message: 'No fields to update' })
+      }
+
+      const order = await fastify.prisma.workOrder.update({
+        where: { id: req.params.orderId, communityId: req.params.communityId },
+        data: updates,
+        include: { assignments: { include: { staff: { include: { user: true } } } }, comments: true },
+      })
+
+      // Notify assigned staff when priority changes
+      if (updates.priority) {
+        try {
+          const PRIORITY_LABEL: Record<string, string> = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', URGENT: '🚨 Urgente' }
+          const assignedUserIds = order.assignments
+            .map((a: any) => a.staff?.user?.id)
+            .filter(Boolean)
+          if (assignedUserIds.length > 0) {
+            await sendPushNotification(fastify.prisma, {
+              userIds: assignedUserIds,
+              title: 'Prioridad actualizada',
+              body: `"${order.title}" cambió a prioridad ${PRIORITY_LABEL[order.priority] ?? order.priority}`,
+              type: 'work_order',
+              data: { workOrderId: order.id, priority: order.priority },
+            })
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      return reply.send(order)
+    },
+  )
+
   // PATCH — update status
   fastify.patch<{ Params: { communityId: string; orderId: string }; Body: unknown }>(
     '/:communityId/work-orders/:orderId/status',
