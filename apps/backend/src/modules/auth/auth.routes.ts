@@ -1,6 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
-import bcrypt from 'bcryptjs'
 import { AuthService } from './auth.service.js'
 import {
   loginSchema,
