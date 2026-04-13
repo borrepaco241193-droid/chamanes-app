@@ -11,6 +11,7 @@ import {
   MessageSquare, ChevronDown, Bell, CheckSquare,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import api from '@/lib/api'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,10 +38,25 @@ const superAdminItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, logout, activeCommunityId, activeCommunityIds, setActiveCommunity, setActiveCommunityIds } = useAuthStore()
+  const { user, logout, activeCommunityId, activeCommunityIds, setActiveCommunity, setActiveCommunityIds, setAuth } = useAuthStore()
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  const isCommunityAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'MANAGER' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'MANAGER'
   const [showCommunityPicker, setShowCommunityPicker] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const { data: allCommunities } = useAllCommunities()
+
+  async function handleClaimSuperAdmin() {
+    setClaiming(true)
+    try {
+      const { data } = await api.post('/auth/claim-super-admin')
+      setAuth(data.user, { accessToken: data.accessToken, refreshToken: data.refreshToken })
+      window.location.reload()
+    } catch (err: any) {
+      alert(err?.response?.data?.message ?? 'No se pudo reclamar el acceso')
+    } finally {
+      setClaiming(false)
+    }
+  }
 
   // For non-SUPER_ADMIN, use communities from user object
   const userCommunities: { id: string; name: string }[] = isSuperAdmin
@@ -139,14 +155,24 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        {isSuperAdmin && (
+        {(isSuperAdmin || isCommunityAdmin) && (
           <>
             <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Super Admin
+              {isSuperAdmin ? 'Super Admin' : 'Administración'}
             </p>
             {superAdminItems.map((item) => (
               <NavLink key={item.href} item={item} pathname={pathname} />
             ))}
+            {!isSuperAdmin && (
+              <button
+                onClick={handleClaimSuperAdmin}
+                disabled={claiming}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-purple-400 hover:text-white hover:bg-purple-900/40 transition-colors"
+              >
+                <Shield className="w-4 h-4 flex-shrink-0" />
+                {claiming ? 'Verificando...' : 'Reclamar Super Admin'}
+              </button>
+            )}
             <div className="border-t border-gray-800 my-3" />
           </>
         )}

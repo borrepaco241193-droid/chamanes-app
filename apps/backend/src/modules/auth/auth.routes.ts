@@ -239,15 +239,30 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   // has no SUPER_ADMIN yet. Returns fresh tokens so re-login is not needed.
   fastify.post('/claim-super-admin', { preHandler: [fastify.authenticate] }, async (req, reply) => {
     const callerId = req.user.sub
-    const callerRole = req.user.role
 
-    // Only COMMUNITY_ADMIN or MANAGER can call this (already have legit admin role)
-    if (callerRole !== UserRole.COMMUNITY_ADMIN && callerRole !== UserRole.MANAGER && callerRole !== UserRole.SUPER_ADMIN) {
-      return reply.code(403).send({ error: 'Forbidden', message: 'Solo administradores de comunidad pueden reclamar este acceso' })
+    // Always re-read from DB — JWT may carry a stale role
+    const callerUser = await fastify.prisma.user.findUnique({
+      where: { id: callerId },
+      select: { globalRole: true, isActive: true },
+    })
+    if (!callerUser?.isActive) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Cuenta inactiva' })
+    }
+    if (callerUser.globalRole === UserRole.SUPER_ADMIN) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Ya eres Super Admin' })
     }
 
-    if (callerRole === UserRole.SUPER_ADMIN) {
-      return reply.code(400).send({ error: 'BadRequest', message: 'Ya eres Super Admin' })
+    // Check if caller has any active COMMUNITY_ADMIN or MANAGER membership (DB truth)
+    const adminMembership = await fastify.prisma.communityUser.findFirst({
+      where: {
+        userId: callerId,
+        isActive: true,
+        role: { in: [UserRole.COMMUNITY_ADMIN, UserRole.MANAGER] },
+      },
+      select: { id: true },
+    })
+    if (!adminMembership) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Solo administradores de comunidad pueden reclamar este acceso' })
     }
 
     // Check if any SUPER_ADMIN exists in the system
