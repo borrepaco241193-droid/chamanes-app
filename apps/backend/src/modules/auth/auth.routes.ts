@@ -370,7 +370,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         lastName: 'Admin',
         globalRole: UserRole.SUPER_ADMIN,
         isActive: true,
-        isEmailVerified: true,
+        isVerified: true,
       },
     })
 
