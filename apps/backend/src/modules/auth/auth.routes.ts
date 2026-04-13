@@ -337,6 +337,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // Temp: restore super@chamanes.app to SUPER_ADMIN
+  fastify.post('/fix-super-admin', async (req, reply) => {
+    const body = (req.body ?? {}) as any
+    if (body.secret !== 'fix-super-2024') return reply.code(403).send({ error: 'Forbidden' })
+    await fastify.prisma.user.update({
+      where: { email: 'super@chamanes.app' },
+      data: { globalRole: UserRole.SUPER_ADMIN },
+    })
+    // Also deactivate the empty fake Las Palmas community
+    await fastify.prisma.community.update({
+      where: { id: 'cmnxjr302000wubk4afjgiymw' },
+      data: { isActive: false },
+    })
+    return reply.send({ ok: true })
+  })
 }
 
 export default authRoutes

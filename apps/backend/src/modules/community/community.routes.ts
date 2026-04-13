@@ -215,15 +215,27 @@ const communityRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'NotFound', message: 'Miembro no encontrado' })
       }
 
-      // Deactivate membership and downgrade globalRole to RESIDENT
+      // Deactivate membership; only downgrade globalRole if no other active admin memberships remain
       await fastify.prisma.communityUser.update({
         where: { id: member.id },
         data: { isActive: false },
       })
-      await fastify.prisma.user.update({
-        where: { id: userId },
-        data: { globalRole: UserRole.RESIDENT },
+      const otherAdminMemberships = await fastify.prisma.communityUser.findFirst({
+        where: {
+          userId,
+          isActive: true,
+          role: { in: [UserRole.COMMUNITY_ADMIN, UserRole.MANAGER] },
+          id: { not: member.id },
+        },
       })
+      const targetUser = await fastify.prisma.user.findUnique({ where: { id: userId }, select: { globalRole: true } })
+      // Never downgrade a SUPER_ADMIN
+      if (!otherAdminMemberships && targetUser?.globalRole !== UserRole.SUPER_ADMIN) {
+        await fastify.prisma.user.update({
+          where: { id: userId },
+          data: { globalRole: UserRole.RESIDENT },
+        })
+      }
 
       return reply.send({ ok: true })
     },
