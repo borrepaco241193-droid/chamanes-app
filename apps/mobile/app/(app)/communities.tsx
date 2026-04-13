@@ -6,12 +6,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   useCommunities, useCreateCommunity,
   useCommunityMembers, useAssignCommunityMember, useRemoveCommunityMember,
 } from '../../src/hooks/useCommunity'
 import { useAuthStore } from '../../src/stores/auth.store'
+import { useMe } from '../../src/hooks/useAuth'
 import type { Community, CommunityMember } from '../../src/services/community.service'
 
 // ── Field component ───────────────────────────────────────────
@@ -332,6 +333,14 @@ export default function CommunitiesScreen() {
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
 
   const { data, isLoading, isRefetching, refetch } = useCommunities()
+  const { refetch: refetchMe } = useMe()
+
+  // Force-refresh both data sources on mount so we always have the latest communities
+  // (bypasses React Query staleTime cache, critical after backend updates)
+  useEffect(() => {
+    refetch()
+    refetchMe()
+  }, [])
 
   // Build communities list:
   // Merge API results (which always come back fresh) with auth store (instant, from cache).

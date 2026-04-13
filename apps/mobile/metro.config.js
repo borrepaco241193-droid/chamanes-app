@@ -7,8 +7,12 @@ const monorepoRoot = path.resolve(projectRoot, '../..')
 
 const config = getDefaultConfig(projectRoot)
 
-// Watch monorepo root for shared packages
-config.watchFolders = [monorepoRoot]
+// Watch monorepo root + root node_modules so asset-heavy packages
+// installed at the root (e.g. react-native-calendars) can serve their images
+config.watchFolders = [
+  monorepoRoot,
+  path.resolve(monorepoRoot, 'node_modules'),
+]
 
 // Resolve from mobile node_modules first, then monorepo root
 config.resolver.nodeModulesPaths = [
