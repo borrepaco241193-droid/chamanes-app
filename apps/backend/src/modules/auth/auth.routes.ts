@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 import { AuthService } from './auth.service.js'
 import {
   loginSchema,
@@ -359,7 +360,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ ok: true, action: 'promoted', email, password: '(same as before)' })
     }
 
-    const bcrypt = await import('bcryptjs')
     const passwordHash = await bcrypt.hash(password, 12)
 
     await fastify.prisma.user.create({
