@@ -272,27 +272,48 @@ function CommunityDetailModal({ community, visible, onClose }: {
 
 // ── Community Card ────────────────────────────────────────────
 
-function CommunityCard({ community, isActive, onSelect, onManage }: {
+function CommunityCard({ community, isActive, isChecked, onSelect, onToggle, onManage, canManage }: {
   community: Community
   isActive: boolean
+  isChecked: boolean
   onSelect: () => void
+  onToggle: () => void
   onManage: () => void
+  canManage: boolean
 }) {
   return (
     <View style={{
-      backgroundColor: isActive ? '#1E3A5F' : '#1E293B',
+      backgroundColor: isChecked ? '#1E3A5F' : '#1E293B',
       borderRadius: 16, marginBottom: 10,
       borderWidth: 1.5,
-      borderColor: isActive ? '#3B82F6' : '#334155',
+      borderColor: isChecked ? '#3B82F6' : '#334155',
     }}>
-      {/* Main tap → select */}
+      {/* Main row */}
       <TouchableOpacity onPress={onSelect} activeOpacity={0.75}
         style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: isActive ? '#3B82F620' : '#0F172A', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isActive ? '#3B82F640' : '#1E293B' }}>
-          <Ionicons name="business-outline" size={22} color={isActive ? '#3B82F6' : '#64748B'} />
+        {/* Checkbox */}
+        <TouchableOpacity onPress={onToggle} style={{ padding: 2 }}>
+          <View style={{
+            width: 24, height: 24, borderRadius: 7, borderWidth: 2,
+            borderColor: isChecked ? '#3B82F6' : '#475569',
+            backgroundColor: isChecked ? '#3B82F6' : 'transparent',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            {isChecked && <Ionicons name="checkmark" size={14} color="white" />}
+          </View>
+        </TouchableOpacity>
+        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isActive ? '#3B82F620' : '#0F172A', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: isActive ? '#3B82F640' : '#1E293B' }}>
+          <Ionicons name="business-outline" size={20} color={isActive ? '#3B82F6' : '#64748B'} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{community.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>{community.name}</Text>
+            {isActive && (
+              <View style={{ backgroundColor: '#3B82F620', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 }}>
+                <Text style={{ color: '#3B82F6', fontSize: 9, fontWeight: '700' }}>ACTIVO</Text>
+              </View>
+            )}
+          </View>
           <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>{community.city}, {community.state}</Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 5 }}>
             <View style={{ backgroundColor: '#0F172A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
@@ -303,20 +324,18 @@ function CommunityCard({ community, isActive, onSelect, onManage }: {
             </View>
           </View>
         </View>
-        {isActive && (
-          <View style={{ backgroundColor: '#3B82F6', borderRadius: 20, width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="checkmark" size={14} color="white" />
-          </View>
-        )}
+        <Ionicons name="chevron-forward" size={16} color="#475569" />
       </TouchableOpacity>
 
-      {/* Manage admins button */}
-      <TouchableOpacity onPress={onManage} activeOpacity={0.75}
-        style={{ borderTopWidth: 1, borderTopColor: '#334155', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Ionicons name="people-outline" size={15} color="#3B82F6" />
-        <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600', flex: 1 }}>Gestionar administradores</Text>
-        <Ionicons name="chevron-forward" size={14} color="#475569" />
-      </TouchableOpacity>
+      {/* Manage admins button — only for admins */}
+      {canManage && (
+        <TouchableOpacity onPress={onManage} activeOpacity={0.75}
+          style={{ borderTopWidth: 1, borderTopColor: '#334155', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="people-outline" size={15} color="#3B82F6" />
+          <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '600', flex: 1 }}>Gestionar administradores</Text>
+          <Ionicons name="chevron-forward" size={14} color="#475569" />
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -326,10 +345,13 @@ function CommunityCard({ community, isActive, onSelect, onManage }: {
 export default function CommunitiesScreen() {
   const user = useAuthStore((s) => s.user)
   const setCommunity = useAuthStore((s) => s.setCommunity)
+  const toggleCommunity = useAuthStore((s) => s.toggleCommunity)
+  const selectAllCommunities = useAuthStore((s) => s.selectAllCommunities)
+  const activeCommunityIds = useAuthStore((s) => s.activeCommunityIds)
   const setAuth = useAuthStore((s) => s.setAuth)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
   const isCommunityAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'MANAGER' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'MANAGER'
-  // True when arriving here because no community is selected yet (first access)
+  const canManage = isSuperAdmin || isCommunityAdmin
   const isFirstSelect = isSuperAdmin && !user?.communityId
 
   const [showNew, setShowNew] = useState(false)
@@ -449,8 +471,16 @@ export default function CommunitiesScreen() {
         )}
         <View style={{ flex: 1 }}>
           <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold' }}>Comunidades</Text>
-          <Text style={{ color: '#64748B', fontSize: 12 }}>{communities.length} registradas</Text>
+          <Text style={{ color: '#64748B', fontSize: 12 }}>
+            {activeCommunityIds.length} de {communities.length} seleccionadas
+          </Text>
         </View>
+        {communities.length > 1 && (
+          <TouchableOpacity onPress={selectAllCommunities}
+            style={{ backgroundColor: '#1E293B', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#334155' }}>
+            <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600' }}>Todas</Text>
+          </TouchableOpacity>
+        )}
         {isSuperAdmin && (
           <TouchableOpacity onPress={() => setShowNew(true)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#3B82F6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
@@ -465,8 +495,8 @@ export default function CommunitiesScreen() {
         <Ionicons name={isFirstSelect ? 'business-outline' : 'information-circle-outline'} size={18} color="#3B82F6" />
         <Text style={{ color: '#94A3B8', fontSize: 12, flex: 1 }}>
           {isFirstSelect
-            ? 'Selecciona el complejo que vas a gestionar para continuar.'
-            : 'Toca una comunidad para activarla. Usa "Gestionar administradores" para asignar managers y admins.'}
+            ? 'Selecciona los complejos que vas a gestionar.'
+            : 'Toca el nombre para activar. Marca la casilla para incluir en la vista combinada.'}
         </Text>
       </View>
 
@@ -482,8 +512,11 @@ export default function CommunitiesScreen() {
             <CommunityCard
               community={item}
               isActive={item.id === user?.communityId}
+              isChecked={activeCommunityIds.includes(item.id)}
               onSelect={() => handleSelect(item)}
+              onToggle={() => toggleCommunity(item.id)}
               onManage={() => setManagingCommunity(item)}
+              canManage={canManage}
             />
           )}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}

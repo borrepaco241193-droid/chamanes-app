@@ -2,19 +2,36 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { residentService } from '../services/resident.service'
 import { useAuthStore } from '../stores/auth.store'
 
+/** Primary community ID — used for mutations (create/update/delete) */
 function useCommunityId() {
-  // Falls back to '' — callers use `enabled: !!communityId` to block fetches when unset.
-  // communityId gets set on login (from JWT or communities[0]) or via setCommunity() when
-  // a SUPER_ADMIN picks a community from the community selector screen.
   return useAuthStore((s) => s.user?.communityId ?? '')
 }
 
+/** All selected community IDs — used for list queries to merge across communities */
+function useActiveCommunityIds() {
+  const ids = useAuthStore((s) => s.activeCommunityIds)
+  const single = useAuthStore((s) => s.user?.communityId ?? '')
+  return ids.length > 0 ? ids : (single ? [single] : [])
+}
+
 export function useUnits(withStats = false) {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   return useQuery({
-    queryKey: ['units', communityId, withStats],
-    queryFn: () => residentService.listUnits(communityId, withStats),
-    enabled: !!communityId,
+    queryKey: ['units', ids, withStats],
+    queryFn: async () => {
+      if (ids.length <= 1) return residentService.listUnits(ids[0] ?? '', withStats)
+      const results = await Promise.allSettled(ids.map((id) => residentService.listUnits(id, withStats)))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      return {
+        units: fulfilled.flatMap((r) => r.units ?? []),
+        stats: fulfilled.reduce((acc, r) => r.stats ? {
+          total: (acc.total ?? 0) + (r.stats.total ?? 0),
+          occupied: (acc.occupied ?? 0) + (r.stats.occupied ?? 0),
+          vacant: (acc.vacant ?? 0) + (r.stats.vacant ?? 0),
+        } : acc, {} as any),
+      }
+    },
+    enabled: ids.length > 0,
     staleTime: 30_000,
   })
 }
@@ -81,11 +98,17 @@ export function useUploadTransferProof() {
 }
 
 export function useResidents(params?: { search?: string; block?: string }) {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   return useQuery({
-    queryKey: ['residents', communityId, params],
-    queryFn: () => residentService.list(communityId, params),
-    enabled: !!communityId,
+    queryKey: ['residents', ids, params],
+    queryFn: async () => {
+      if (ids.length <= 1) return residentService.list(ids[0] ?? '', params)
+      const results = await Promise.allSettled(ids.map((id) => residentService.list(id, params)))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = fulfilled.flatMap((r) => r.residents ?? [])
+      return { residents: merged, total: merged.length, page: 1, pages: 1 }
+    },
+    enabled: ids.length > 0,
     staleTime: 60_000,
   })
 }

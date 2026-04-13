@@ -27,12 +27,18 @@ interface AuthState {
   isAuthenticated: boolean
   isHydrated: boolean
   hasAcceptedTerms: boolean
+  /** All currently selected community IDs (multi-select) */
+  activeCommunityIds: string[]
 
   // Actions
   setAuth: (user: AuthUser, tokens: AuthTokens) => void
   setUser: (user: AuthUser) => void
   /** Switch active community without re-login (for SUPER_ADMIN managing multiple communities) */
   setCommunity: (communityId: string, communityRole?: AuthUser['communityRole']) => void
+  /** Toggle a community in/out of the active selection */
+  toggleCommunity: (communityId: string) => void
+  /** Select all communities */
+  selectAllCommunities: () => void
   acceptTerms: () => void
   logout: () => void
   setHydrated: () => void
@@ -46,9 +52,12 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isHydrated: false,
       hasAcceptedTerms: false,
+      activeCommunityIds: [],
 
-      setAuth: (user, tokens) =>
-        set({ user, tokens, isAuthenticated: true }),
+      setAuth: (user, tokens) => {
+        const allIds = user.communities?.map((c) => c.id) ?? (user.communityId ? [user.communityId] : [])
+        set({ user, tokens, isAuthenticated: true, activeCommunityIds: allIds })
+      },
 
       setUser: (user) =>
         set({ user }),
@@ -60,10 +69,25 @@ export const useAuthStore = create<AuthState>()(
             : state.user,
         })),
 
+      toggleCommunity: (communityId) =>
+        set((state) => {
+          const ids = state.activeCommunityIds
+          if (ids.includes(communityId)) {
+            if (ids.length === 1) return {} // keep at least one
+            return { activeCommunityIds: ids.filter((id) => id !== communityId) }
+          }
+          return { activeCommunityIds: [...ids, communityId] }
+        }),
+
+      selectAllCommunities: () =>
+        set((state) => ({
+          activeCommunityIds: state.user?.communities?.map((c) => c.id) ?? state.activeCommunityIds,
+        })),
+
       acceptTerms: () => set({ hasAcceptedTerms: true }),
 
       logout: () =>
-        set({ user: null, tokens: null, isAuthenticated: false }),
+        set({ user: null, tokens: null, isAuthenticated: false, activeCommunityIds: [] }),
 
       setHydrated: () =>
         set({ isHydrated: true }),
@@ -80,6 +104,7 @@ export const useAuthStore = create<AuthState>()(
         tokens: state.tokens,
         isAuthenticated: state.isAuthenticated,
         hasAcceptedTerms: state.hasAcceptedTerms,
+        activeCommunityIds: state.activeCommunityIds,
       }),
     },
   ),
