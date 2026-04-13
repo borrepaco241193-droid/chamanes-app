@@ -13,11 +13,11 @@ function usePosts() {
     queryKey: ['forum-posts', ids],
     queryFn: async () => {
       if (ids.length <= 1) {
-        const { data } = await api.get(`/communities/${ids[0]}/forum/posts?limit=50`)
+        const { data } = await api.get(`/communities/${ids[0]}/forum?limit=50`)
         return data.posts ?? []
       }
       const settled = await Promise.allSettled(
-        ids.map((id) => api.get(`/communities/${id}/forum/posts?limit=50`).then((r) => ({ communityId: id, posts: r.data.posts ?? [] })))
+        ids.map((id) => api.get(`/communities/${id}/forum?limit=50`).then((r) => ({ communityId: id, posts: r.data.posts ?? [] })))
       )
       const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
       const merged = results.flatMap((r) => (r.posts ?? []).map((p: any) => ({ ...p, _communityId: r.communityId })))
@@ -31,9 +31,20 @@ function usePosts() {
 function useCreatePost() {
   const qc = useQueryClient()
   const { activeCommunityId, activeCommunityIds } = useAuthStore()
-  const communityId = activeCommunityId ?? activeCommunityIds[0]
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   return useMutation({
-    mutationFn: (body: object) => api.post(`/communities/${communityId}/forum/posts`, body).then((r) => r.data),
+    // Post to ALL selected communities simultaneously
+    mutationFn: async (body: object) => {
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.post(`/communities/${id}/forum`, body).then((r) => r.data))
+      )
+      const failed = settled.filter((r) => r.status === 'rejected')
+      if (failed.length === ids.length) {
+        // All failed — throw so the UI shows an error
+        throw (failed[0] as PromiseRejectedResult).reason
+      }
+      return settled
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts'] }),
   })
 }
@@ -44,7 +55,7 @@ function useDeletePost() {
   const communityId = activeCommunityId ?? activeCommunityIds[0]
   return useMutation({
     mutationFn: ({ postId, postCommunityId }: { postId: string; postCommunityId?: string }) =>
-      api.delete(`/communities/${postCommunityId ?? communityId}/forum/posts/${postId}`),
+      api.delete(`/communities/${postCommunityId ?? communityId}/forum/${postId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts'] }),
   })
 }
@@ -53,7 +64,6 @@ export default function ForumPage() {
   const { data: posts, isLoading } = usePosts()
   const deletePost = useDeletePost()
   const { activeCommunityIds, user } = useAuthStore()
-  // Build a communityId → name map from the user's communities
   const communityMap = Object.fromEntries(
     (user?.communities ?? []).map((c: any) => [c.id, c.name])
   )
@@ -82,9 +92,13 @@ export default function ForumPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Foro Comunitario</h1>
-          <p className="text-gray-500 text-sm">Publicaciones de la comunidad</p>
+          <p className="text-gray-500 text-sm">
+            {activeCommunityIds.length > 1
+              ? `Publicaciones de ${activeCommunityIds.length} complejos`
+              : 'Publicaciones de la comunidad'}
+          </p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary"><Plus className="w-4 h-4" /> Nueva publicación</button>
+        <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-1.5"><Plus className="w-4 h-4" /> Nueva publicación</button>
       </div>
 
       {showCreate && (
@@ -93,6 +107,16 @@ export default function ForumPage() {
             <h3 className="font-semibold text-gray-900">Nueva publicación</h3>
             <button onClick={() => setShowCreate(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"><X className="w-4 h-4" /></button>
           </div>
+          {activeCommunityIds.length > 1 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <span className="text-xs text-gray-500">Se publicará en:</span>
+              {activeCommunityIds.map((id) => (
+                <span key={id} className="text-xs bg-brand-50 text-brand-600 border border-brand-100 px-2 py-0.5 rounded-full font-medium">
+                  {communityMap[id] ?? 'Comunidad'}
+                </span>
+              ))}
+            </div>
+          )}
           <form onSubmit={handleCreate} className="space-y-3">
             <textarea
               className="input"
@@ -106,7 +130,7 @@ export default function ForumPage() {
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
               <button type="submit" disabled={createPost.isPending || !body.trim()} className="btn-primary flex-1">
-                {createPost.isPending ? 'Publicando...' : 'Publicar'}
+                {createPost.isPending ? 'Publicando...' : activeCommunityIds.length > 1 ? `Publicar en ${activeCommunityIds.length} complejos` : 'Publicar'}
               </button>
             </div>
           </form>
@@ -161,10 +185,10 @@ export default function ForumPage() {
             )}
             <div className="flex items-center gap-4 pt-1">
               <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                <Heart className="w-3.5 h-3.5" /> {post.likesCount}
+                <Heart className="w-3.5 h-3.5" /> {post.likesCount ?? post._count?.likes ?? 0}
               </span>
               <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                <MessageSquare className="w-3.5 h-3.5" /> {post.comments?.length ?? 0} comentario{(post.comments?.length ?? 0) !== 1 ? 's' : ''}
+                <MessageSquare className="w-3.5 h-3.5" /> {post._count?.comments ?? post.comments?.length ?? 0} comentario{(post._count?.comments ?? post.comments?.length ?? 0) !== 1 ? 's' : ''}
               </span>
             </div>
           </div>

@@ -43,7 +43,7 @@ function UserInitials({ name }: { name: string }) {
 export default function VerificationsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('PENDING')
   const [photoModal, setPhotoModal] = useState<string | null>(null)
-  const [rejectModal, setRejectModal] = useState<{ id: string; name: string } | null>(null)
+  const [rejectModal, setRejectModal] = useState<{ id: string; name: string; communityId?: string } | null>(null)
   const [rejectNote, setRejectNote] = useState('')
   const { data, isLoading } = useIdVerifications(tab)
   const verifyId = useVerifyId()
@@ -51,10 +51,10 @@ export default function VerificationsPage() {
 
   const pendingCount = tab === 'PENDING' ? users.length : 0
 
-  const handleApprove = (userId: string) => verifyId.mutate({ userId, approve: true })
+  const handleApprove = (userId: string, communityId?: string) => verifyId.mutate({ userId, approve: true, communityId })
   const handleReject = () => {
     if (!rejectModal) return
-    verifyId.mutate({ userId: rejectModal.id, approve: false, note: rejectNote }, {
+    verifyId.mutate({ userId: rejectModal.id, approve: false, note: rejectNote, communityId: rejectModal.communityId }, {
       onSuccess: () => { setRejectModal(null); setRejectNote('') },
     })
   }
@@ -186,7 +186,7 @@ export default function VerificationsPage() {
               {u.idVerificationStatus === 'PENDING' && (
                 <div className="flex gap-2 px-4 pb-4">
                   <button
-                    onClick={() => handleApprove(u.id)}
+                    onClick={() => handleApprove(u.id, u._communityId)}
                     disabled={verifyId.isPending}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
                   >
@@ -194,7 +194,7 @@ export default function VerificationsPage() {
                     Aprobar
                   </button>
                   <button
-                    onClick={() => setRejectModal({ id: u.id, name: fullName(u) })}
+                    onClick={() => setRejectModal({ id: u.id, name: fullName(u), communityId: u._communityId })}
                     disabled={verifyId.isPending}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors"
                   >

@@ -145,14 +145,24 @@ export function useAccessEvents(limit = 50) {
 
 export function useIdVerifications(status = 'ALL') {
   const { activeCommunityId, activeCommunityIds } = useAuthStore()
-  const communityId = activeCommunityId ?? activeCommunityIds[0]
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   return useQuery({
-    queryKey: ['id-verifications', communityId, status],
+    queryKey: ['id-verifications', ids, status],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${communityId}/admin/id-verifications?status=${status}`)
-      return data.verifications ?? data.users ?? data
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/admin/id-verifications?status=${status}`)
+        return data.verifications ?? data.users ?? data
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/admin/id-verifications?status=${status}`).then((r) => ({ communityId: id, data: r.data })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = results.flatMap((r) => (r.data.verifications ?? r.data.users ?? []).map((u: any) => ({ ...u, _communityId: r.communityId })))
+      // Deduplicate by user id (same user can belong to multiple communities)
+      const seen = new Set<string>()
+      return merged.filter((u: any) => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
     },
-    enabled: !!communityId,
+    enabled: ids.length > 0,
   })
 }
 
@@ -161,8 +171,8 @@ export function useVerifyId() {
   const { activeCommunityId, activeCommunityIds } = useAuthStore()
   const communityId = activeCommunityId ?? activeCommunityIds[0]
   return useMutation({
-    mutationFn: ({ userId, approve, note }: { userId: string; approve: boolean; note?: string }) =>
-      api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve, note }).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['id-verifications', communityId] }),
+    mutationFn: ({ userId, approve, note, communityId: cId }: { userId: string; approve: boolean; note?: string; communityId?: string }) =>
+      api.patch(`/communities/${cId ?? communityId}/admin/id-verify/${userId}`, { approve, note }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['id-verifications'] }),
   })
 }

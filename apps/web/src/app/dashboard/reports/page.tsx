@@ -1,20 +1,49 @@
 'use client'
 import { useState } from 'react'
 import { useAuthStore } from '@/store/auth.store'
-import { BarChart3, Download, FileText } from 'lucide-react'
+import { BarChart3, Download, FileText, Building2 } from 'lucide-react'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const REPORTS = [
-  { type: 'access', label: 'Accesos al fraccionamiento', description: 'Registro de entradas y salidas por fecha', icon: '🚪' },
-  { type: 'payments', label: 'Pagos y cuotas', description: 'Estado de pagos: pendientes, cobrados y vencidos', icon: '💳' },
-  { type: 'reservations', label: 'Reservaciones de áreas', description: 'Historial de reservaciones de áreas comunes', icon: '📅' },
-  { type: 'visitors', label: 'Pases de visitantes', description: 'Todos los pases QR generados', icon: '👤' },
-  { type: 'summary', label: 'Resumen ejecutivo', description: 'Estadísticas consolidadas del período', icon: '📊' },
+  { type: 'access',        label: 'Accesos al fraccionamiento', description: 'Registro de entradas y salidas por fecha', icon: '🚪' },
+  { type: 'payments',      label: 'Pagos y cuotas',            description: 'Estado de pagos: pendientes, cobrados y vencidos', icon: '💳' },
+  { type: 'reservations',  label: 'Reservaciones de áreas',    description: 'Historial de reservaciones de áreas comunes', icon: '📅' },
+  { type: 'visitors',      label: 'Pases de visitantes',       description: 'Todos los pases QR generados', icon: '👤' },
+  { type: 'summary',       label: 'Resumen ejecutivo',         description: 'Estadísticas consolidadas del período', icon: '📊' },
 ] as const
 
+// Parse a CSV string into [headers[], rows[][]]
+function parseCSV(text: string): { headers: string[]; rows: string[][] } {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim())
+  if (lines.length === 0) return { headers: [], rows: [] }
+  const split = (line: string) => {
+    const result: string[] = []
+    let cur = ''
+    let inQ = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') { inQ = !inQ } else if (ch === ',' && !inQ) { result.push(cur); cur = '' } else { cur += ch }
+    }
+    result.push(cur)
+    return result
+  }
+  const headers = split(lines[0])
+  const rows = lines.slice(1).map(split)
+  return { headers, rows }
+}
+
+function toCSV(headers: string[], rows: string[][]): string {
+  const escape = (v: string) => v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v
+  return [headers.join(','), ...rows.map((r) => r.map(escape).join(','))].join('\r\n')
+}
+
 export default function ReportsPage() {
-  const { activeCommunityId, tokens } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds, user, tokens } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+  const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
+  const multiCommunity = ids.length > 1
+
   const [from, setFrom] = useState(() => {
     const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10)
   })
@@ -23,22 +52,56 @@ export default function ReportsPage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   const download = async (type: string) => {
-    if (!activeCommunityId || !tokens) return
+    if (!ids.length || !tokens) return
     setDownloading(type)
     setSuccess(null)
     try {
       const params = new URLSearchParams({ from, to })
-      const url = `${API_URL}/api/v1/communities/${activeCommunityId}/admin/csv/${type}?${params}`
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` },
-      })
-      if (!res.ok) throw new Error('Error al descargar')
-      const blob = await res.blob()
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(blob)
-      link.download = `${type}_${from}_${to}.csv`
-      link.click()
-      URL.revokeObjectURL(link.href)
+
+      if (!multiCommunity) {
+        // Single community — direct download
+        const url = `${API_URL}/api/v1/communities/${ids[0]}/admin/csv/${type}?${params}`
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${tokens.accessToken}` } })
+        if (!res.ok) throw new Error('Error al descargar')
+        const blob = await res.blob()
+        triggerDownload(blob, `${type}_${from}_${to}.csv`)
+      } else {
+        // Multi-community — fetch all, merge with a "Comunidad" column
+        const settled = await Promise.allSettled(
+          ids.map(async (id) => {
+            const url = `${API_URL}/api/v1/communities/${id}/admin/csv/${type}?${params}`
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${tokens.accessToken}` } })
+            if (!res.ok) throw new Error(`Error en ${communityMap[id] ?? id}`)
+            const text = await res.text()
+            return { communityId: id, text }
+          })
+        )
+
+        const fulfilled = settled
+          .filter((r): r is PromiseFulfilledResult<{ communityId: string; text: string }> => r.status === 'fulfilled')
+          .map((r) => r.value)
+
+        if (fulfilled.length === 0) throw new Error('No se pudieron descargar los reportes')
+
+        // Merge: add "Comunidad" column to all rows
+        let mergedHeaders: string[] = []
+        const mergedRows: string[][] = []
+
+        fulfilled.forEach(({ communityId, text }) => {
+          const { headers, rows } = parseCSV(text)
+          if (headers.length === 0) return
+          if (mergedHeaders.length === 0) {
+            mergedHeaders = ['Comunidad', ...headers]
+          }
+          const cName = communityMap[communityId] ?? communityId
+          rows.forEach((row) => mergedRows.push([cName, ...row]))
+        })
+
+        const csvText = '\uFEFF' + toCSV(mergedHeaders, mergedRows) // BOM for Excel
+        const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' })
+        triggerDownload(blob, `${type}_combinado_${from}_${to}.csv`)
+      }
+
       setSuccess(type)
       setTimeout(() => setSuccess(null), 3000)
     } catch {
@@ -48,6 +111,14 @@ export default function ReportsPage() {
     }
   }
 
+  function triggerDownload(blob: Blob, filename: string) {
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -55,10 +126,23 @@ export default function ReportsPage() {
         <p className="text-gray-500 text-sm">Exporta datos en formato CSV</p>
       </div>
 
+      {multiCommunity && (
+        <div className="card p-4 border-brand-200 bg-brand-50 flex items-start gap-3">
+          <Building2 className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-brand-900">Modo multi-complejo activo</p>
+            <p className="text-xs text-brand-700 mt-0.5">
+              Los reportes combinarán datos de: {ids.map((id) => communityMap[id] ?? id).join(', ')}.
+              Se descargará un solo CSV con columna "Comunidad" identificando cada registro.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Date range picker */}
       <div className="card p-5">
         <h3 className="font-semibold text-gray-900 mb-4">Período del reporte</h3>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div>
             <label className="label">Desde</label>
             <input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -93,7 +177,7 @@ export default function ReportsPage() {
               ) : success === r.type ? (
                 <>✓ Descargado</>
               ) : (
-                <><Download className="w-4 h-4" /> Descargar CSV</>
+                <><Download className="w-4 h-4" /> {multiCommunity ? 'CSV combinado' : 'Descargar CSV'}</>
               )}
             </button>
           </div>

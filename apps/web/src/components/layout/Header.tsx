@@ -194,8 +194,8 @@ export function Header() {
 
               {/* Footer */}
               <div className="px-4 py-2.5 border-t border-gray-100 text-center">
-                <Link href="/dashboard/notifications" className="text-xs text-brand-600 hover:text-brand-700">
-                  Ver configuración de notificaciones →
+                <Link href="/dashboard/notifications" onClick={() => setShowNotifs(false)} className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                  Ver todas las notificaciones →
                 </Link>
               </div>
             </div>
