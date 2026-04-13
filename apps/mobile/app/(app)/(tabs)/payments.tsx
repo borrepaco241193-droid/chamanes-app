@@ -6,17 +6,31 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native'
 // Stripe is a native module — imported dynamically to avoid crashing in Expo Go
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { usePayments, usePaymentIntent, useGenerateFees } from '../../../src/hooks/usePayments'
-import { useMarkPaid, useUploadTransferProof } from '../../../src/hooks/useResidents'
+import { usePayments, usePaymentIntent, useGenerateFees, useCreateCharge } from '../../../src/hooks/usePayments'
+import { useMarkPaid, useUploadTransferProof, useUnits } from '../../../src/hooks/useResidents'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import * as ImagePicker from 'expo-image-picker'
 import { format, isPast, differenceInDays } from 'date-fns'
 import type { Payment, PaymentStatus } from '../../../src/services/payment.service'
+
+type ChargeType = 'MAINTENANCE_FEE' | 'FINE' | 'RESERVATION_FEE' | 'OTHER'
+
+const CHARGE_TYPES: { value: ChargeType; label: string; icon: string }[] = [
+  { value: 'MAINTENANCE_FEE', label: 'Mantenimiento', icon: 'home-outline' },
+  { value: 'FINE',            label: 'Multa',         icon: 'warning-outline' },
+  { value: 'RESERVATION_FEE',label: 'Reservación',   icon: 'calendar-outline' },
+  { value: 'OTHER',           label: 'Otro',          icon: 'ellipsis-horizontal-outline' },
+]
 
 const STATUS_CONFIG: Record<PaymentStatus, { label: string; bg: string; text: string; icon: string }> = {
   PENDING: { label: 'Pendiente', bg: 'bg-orange-500/20', text: 'text-orange-400', icon: 'time-outline' },
@@ -134,6 +148,7 @@ export default function PaymentsScreen() {
   const { mutateAsync: markPaid } = useMarkPaid()
   const { mutateAsync: uploadProof } = useUploadTransferProof()
   const { mutateAsync: generateFees, isPending: isGenerating } = useGenerateFees()
+  const { mutateAsync: createCharge, isPending: isCreatingCharge } = useCreateCharge()
   const [payingId, setPayingId] = useState<string | null>(null)
   const user = useAuthStore((s) => s.user)
   const isAdmin = (
@@ -144,6 +159,42 @@ export default function PaymentsScreen() {
     user?.communityRole === 'COMMUNITY_ADMIN' ||
     user?.communityRole === 'MANAGER'
   )
+
+  // Charge modal state
+  const [showChargeModal, setShowChargeModal] = useState(false)
+  const [chargeType, setChargeType] = useState<ChargeType>('MAINTENANCE_FEE')
+  const [chargeAmount, setChargeAmount] = useState('')
+  const [chargeDesc, setChargeDesc] = useState('')
+  const [chargeDueDate, setChargeDueDate] = useState('')
+  const [chargeUnitId, setChargeUnitId] = useState('')
+  const { data: unitsData } = useUnits(false)
+  const units: { id: string; number: string; block?: string }[] = unitsData?.units ?? []
+
+  async function handleCreateCharge() {
+    const amount = parseFloat(chargeAmount)
+    if (!chargeUnitId) { Alert.alert('Error', 'Selecciona una unidad'); return }
+    if (!amount || amount <= 0) { Alert.alert('Error', 'Ingresa un monto válido'); return }
+    if (!chargeDesc.trim()) { Alert.alert('Error', 'Ingresa una descripción'); return }
+    try {
+      await createCharge({
+        unitId: chargeUnitId,
+        amount,
+        description: chargeDesc.trim(),
+        type: chargeType,
+        dueDate: chargeDueDate || undefined,
+      })
+      setShowChargeModal(false)
+      setChargeAmount('')
+      setChargeDesc('')
+      setChargeDueDate('')
+      setChargeUnitId('')
+      setChargeType('MAINTENANCE_FEE')
+      refetch()
+      Alert.alert('Listo', 'Cargo creado correctamente')
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo crear el cargo')
+    }
+  }
 
   async function handleMarkPaid(paymentId: string) {
     Alert.alert(
@@ -330,15 +381,25 @@ export default function PaymentsScreen() {
           )}
         </View>
         {isAdmin && (
-          <TouchableOpacity
-            onPress={handleGenerateFees}
-            disabled={isGenerating}
-            style={{ backgroundColor: '#10B98120', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#10B98140' }}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="add-circle-outline" size={16} color="#10B981" />
-            <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Generar cuotas</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setShowChargeModal(true)}
+              style={{ backgroundColor: '#3B82F620', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#3B82F640' }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="receipt-outline" size={16} color="#3B82F6" />
+              <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '700' }}>Crear cargo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleGenerateFees}
+              disabled={isGenerating}
+              style={{ backgroundColor: '#10B98120', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#10B98140' }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#10B981" />
+              <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Generar cuotas</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -404,6 +465,114 @@ export default function PaymentsScreen() {
           }
         />
       )}
+
+      {/* Create Charge Modal */}
+      <Modal visible={showChargeModal} animationType="slide" transparent onRequestClose={() => setShowChargeModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+            <View style={{ backgroundColor: '#1E293B', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' }}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {/* Modal Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <Text style={{ color: '#F1F5F9', fontSize: 18, fontWeight: '700' }}>Crear cargo</Text>
+                  <TouchableOpacity onPress={() => setShowChargeModal(false)} style={{ padding: 4 }}>
+                    <Ionicons name="close" size={22} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Type selector */}
+                <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Tipo de cargo</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {CHARGE_TYPES.map((t) => (
+                    <TouchableOpacity
+                      key={t.value}
+                      onPress={() => { setChargeType(t.value); setChargeDesc(t.label) }}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 6,
+                        paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+                        backgroundColor: chargeType === t.value ? '#3B82F620' : '#0F172A',
+                        borderWidth: 1, borderColor: chargeType === t.value ? '#3B82F6' : '#334155',
+                      }}
+                    >
+                      <Ionicons name={t.icon as any} size={14} color={chargeType === t.value ? '#3B82F6' : '#94A3B8'} />
+                      <Text style={{ color: chargeType === t.value ? '#3B82F6' : '#94A3B8', fontSize: 13, fontWeight: '600' }}>{t.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Unit picker */}
+                <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Unidad</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {units.length === 0 && (
+                      <Text style={{ color: '#64748B', fontSize: 13 }}>Cargando unidades...</Text>
+                    )}
+                    {units.map((u) => {
+                      const label = u.block ? `${u.block}-${u.number}` : u.number
+                      return (
+                        <TouchableOpacity
+                          key={u.id}
+                          onPress={() => setChargeUnitId(u.id)}
+                          style={{
+                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                            backgroundColor: chargeUnitId === u.id ? '#3B82F620' : '#0F172A',
+                            borderWidth: 1, borderColor: chargeUnitId === u.id ? '#3B82F6' : '#334155',
+                          }}
+                        >
+                          <Text style={{ color: chargeUnitId === u.id ? '#3B82F6' : '#94A3B8', fontWeight: '600', fontSize: 13 }}>{label}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                </ScrollView>
+
+                {/* Description */}
+                <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Descripción</Text>
+                <TextInput
+                  value={chargeDesc}
+                  onChangeText={setChargeDesc}
+                  placeholder="Ej: Cuota de mantenimiento febrero"
+                  placeholderTextColor="#64748B"
+                  style={{ backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#F1F5F9', fontSize: 14, marginBottom: 16 }}
+                />
+
+                {/* Amount */}
+                <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Monto (MXN)</Text>
+                <TextInput
+                  value={chargeAmount}
+                  onChangeText={setChargeAmount}
+                  placeholder="0.00"
+                  placeholderTextColor="#64748B"
+                  keyboardType="decimal-pad"
+                  style={{ backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#F1F5F9', fontSize: 20, fontWeight: '700', marginBottom: 16 }}
+                />
+
+                {/* Due date (optional) */}
+                <Text style={{ color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fecha límite (opcional)</Text>
+                <TextInput
+                  value={chargeDueDate}
+                  onChangeText={setChargeDueDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#64748B"
+                  style={{ backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, color: '#F1F5F9', fontSize: 14, marginBottom: 24 }}
+                />
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleCreateCharge}
+                  disabled={isCreatingCharge}
+                  style={{ backgroundColor: '#3B82F6', borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: isCreatingCharge ? 0.6 : 1 }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                    {isCreatingCharge ? 'Creando...' : 'Crear cargo'}
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
