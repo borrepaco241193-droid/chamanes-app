@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { router } from 'expo-router'
 import { useState, useEffect } from 'react'
 import { useActiveShift, useShiftHistory, useStaffList, useCheckIn, useCheckOut } from '../../../src/hooks/useStaff'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -293,13 +294,25 @@ export default function StaffScreen() {
                 : format(new Date(), "EEEE d 'de' MMMM", { locale: es })}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={handleRefresh}
-            className="w-9 h-9 bg-surface-card border border-surface-border rounded-xl items-center justify-center"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="refresh-outline" size={18} color="#94A3B8" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            {isAdmin && (
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/residents' as any)}
+                style={{ backgroundColor: '#3B82F620', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: '#3B82F640' }}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="person-add-outline" size={15} color="#3B82F6" />
+                <Text style={{ color: '#3B82F6', fontSize: 12, fontWeight: '700' }}>Agregar</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={handleRefresh}
+              className="w-9 h-9 bg-surface-card border border-surface-border rounded-xl items-center justify-center"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {isLoading ? (

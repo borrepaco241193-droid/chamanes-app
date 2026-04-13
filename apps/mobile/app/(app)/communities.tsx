@@ -12,7 +12,7 @@ import {
   useCommunityMembers, useAssignCommunityMember, useRemoveCommunityMember,
 } from '../../src/hooks/useCommunity'
 import { useAuthStore } from '../../src/stores/auth.store'
-import { useMe } from '../../src/hooks/useAuth'
+import { authService } from '../../src/services/auth.service'
 import type { Community, CommunityMember } from '../../src/services/community.service'
 
 // ── Field component ───────────────────────────────────────────
@@ -333,18 +333,21 @@ export default function CommunitiesScreen() {
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
 
   const { data, isLoading, isRefetching, refetch } = useCommunities()
-  const { refetch: refetchMe } = useMe()
+  const setUser = useAuthStore((s) => s.setUser)
 
-  // Force-refresh both data sources on mount so we always have the latest communities
-  // (bypasses React Query staleTime cache, critical after backend updates)
+  // On mount: call /auth/me directly (bypassing React Query cache) to always get
+  // the freshest community list — critical when user is added to a new community
   useEffect(() => {
+    authService.getMe().then((result: any) => {
+      if (result && Array.isArray(result.communities) && result.communities.length > 0 && user) {
+        setUser({ ...user, communities: result.communities })
+      }
+    }).catch(() => {})
     refetch()
-    refetchMe()
   }, [])
 
   // Build communities list:
-  // Merge API results (which always come back fresh) with auth store (instant, from cache).
-  // API data takes priority (has full fields); auth store fills in while API loads.
+  // Merge /communities API (SUPER_ADMIN) + /auth/me communities (all roles) + auth store cache.
   const apiCommunities: Community[] = data?.communities ?? []
   const authStoreList: Community[] = (user?.communities ?? []).map((c) => ({
     id: c.id, name: c.name, city: '', state: '', country: '', address: '',
@@ -358,7 +361,7 @@ export default function CommunitiesScreen() {
   apiCommunities.forEach((c) => mergedMap.set(c.id, c))
   const communities: Community[] = Array.from(mergedMap.values())
 
-  // Allow access if SUPER_ADMIN, or if auth store OR live API shows >1 community
+  // Allow access if SUPER_ADMIN, or if any data source shows >1 community
   const effectiveCount = Math.max(communities.length, authStoreList.length, apiCommunities.length)
   const canAccessCommunities = isSuperAdmin || effectiveCount > 1
 
