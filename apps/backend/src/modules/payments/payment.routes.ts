@@ -116,7 +116,7 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (req, reply) => {
       const { communityId } = req.params
-      const { unitId, amount, description, type = 'OTHER', dueDate, notes } = req.body as any
+      const { unitId, amount, description, type = 'OTHER', dueDate } = req.body as any
 
       if (!unitId || !amount || !description) {
         return reply.code(400).send({ error: 'unitId, amount y description son requeridos' })
@@ -125,13 +125,13 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'El monto debe ser mayor a 0' })
       }
 
-      // Find the resident of the unit
+      // Find the resident of the unit via UnitResident → CommunityUser → User
       const unit = await fastify.prisma.unit.findFirst({
         where: { id: unitId, communityId },
         include: {
-          communityUsers: {
-            where: { isActive: true },
-            include: { user: { select: { id: true, firstName: true, lastName: true } } },
+          residents: {
+            where: { communityUser: { isActive: true } },
+            include: { communityUser: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } },
             take: 1,
           },
         },
@@ -141,7 +141,7 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'Unidad no encontrada' })
       }
 
-      const residentUser = unit.communityUsers[0]?.user
+      const residentUser = unit.residents[0]?.communityUser.user
       const userId = residentUser?.id
 
       const community = await fastify.prisma.community.findUnique({

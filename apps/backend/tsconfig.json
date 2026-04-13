@@ -33,5 +33,4 @@
     "node_modules",
     "dist"
   ],
-  "extends": "expo/tsconfig.base"
 }
