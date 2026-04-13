@@ -26,7 +26,7 @@ const createCommunitySchema = z.object({
   currency: z.string().default('MXN'),
 })
 
-const updateCommunitySchema = createCommunitySchema.partial()
+const updateCommunitySchema = createCommunitySchema.partial().extend({ isActive: z.boolean().optional() })
 
 const communityRoutes: FastifyPluginAsync = async (fastify) => {
 
