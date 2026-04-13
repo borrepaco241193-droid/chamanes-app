@@ -338,44 +338,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
-  // ── One-time bootstrap: create super@chamanes.app SUPER_ADMIN ──
-  // Protected by secret token in URL. Remove this route after first use.
-  fastify.post('/bootstrap-super-admin', async (req, reply) => {
-    const body = (req.body ?? {}) as any
-    if (body.secret !== 'chamanes-bootstrap-2024') {
-      return reply.code(403).send({ error: 'Forbidden' })
-    }
-
-    const email = 'super@chamanes.app'
-    const password = 'SuperAdmin2024!'
-
-    // Check if already exists
-    const existing = await fastify.prisma.user.findUnique({ where: { email } })
-    if (existing) {
-      // Just promote to SUPER_ADMIN if exists
-      await fastify.prisma.user.update({
-        where: { id: existing.id },
-        data: { globalRole: UserRole.SUPER_ADMIN, isActive: true },
-      })
-      return reply.send({ ok: true, action: 'promoted', email, password: '(same as before)' })
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12)
-
-    await fastify.prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        firstName: 'Super',
-        lastName: 'Admin',
-        globalRole: UserRole.SUPER_ADMIN,
-        isActive: true,
-        isVerified: true,
-      },
-    })
-
-    return reply.code(201).send({ ok: true, action: 'created', email, password })
-  })
 }
 
 export default authRoutes
