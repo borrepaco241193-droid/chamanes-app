@@ -1,24 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { workOrderService, type WorkOrderStatus } from '../services/workorder.service'
 import { staffService } from '../services/staff.service'
-import { useAuthStore } from '../stores/auth.store'
-
-function useCommunityId() {
-  return useAuthStore((s) => s.user?.communityId ?? '')
-}
+import { useActiveCommunityIds, usePrimaryCommunityId } from './useActiveCommunityIds'
 
 export function useWorkOrders(status?: WorkOrderStatus) {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   return useQuery({
-    queryKey: ['work-orders', communityId, status],
-    queryFn: () => workOrderService.list(communityId, { status }),
-    enabled: !!communityId,
+    queryKey: ['work-orders', ids, status],
+    queryFn: async () => {
+      if (ids.length <= 1) return workOrderService.list(ids[0] ?? '', { status })
+      const results = await Promise.allSettled(ids.map((id) => workOrderService.list(id, { status })))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = fulfilled.flatMap((r) => r.workOrders ?? r.data ?? []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return { workOrders: merged, total: merged.length }
+    },
+    enabled: ids.length > 0,
     staleTime: 30_000,
   })
 }
 
 export function useWorkOrder(orderId: string) {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   return useQuery({
     queryKey: ['work-order', communityId, orderId],
     queryFn: () => workOrderService.get(communityId, orderId),
@@ -27,7 +29,7 @@ export function useWorkOrder(orderId: string) {
 }
 
 export function useCreateWorkOrder() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: {
@@ -38,62 +40,68 @@ export function useCreateWorkOrder() {
       location?: string
     }) => workOrderService.create(communityId, data as any),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-orders'] })
     },
   })
 }
 
 export function useUpdateWorkOrderStatus() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, status }: { orderId: string; status: WorkOrderStatus }) =>
       workOrderService.updateStatus(communityId, orderId, status),
     onSuccess: (_, { orderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-orders'] })
       queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
     },
   })
 }
 
 export function useUpdateWorkOrder() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, data }: { orderId: string; data: { priority?: string; status?: string; title?: string; location?: string } }) =>
       workOrderService.update(communityId, orderId, data),
     onSuccess: (_, { orderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-orders'] })
       queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
     },
   })
 }
 
 export function useStaffList() {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   return useQuery({
-    queryKey: ['staff-list', communityId],
-    queryFn: () => staffService.listStaff(communityId),
-    enabled: !!communityId,
+    queryKey: ['staff-list', ids],
+    queryFn: async () => {
+      if (ids.length <= 1) return staffService.listStaff(ids[0] ?? '')
+      const results = await Promise.allSettled(ids.map((id) => staffService.listStaff(id)))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = fulfilled.flatMap((r) => r.staff ?? r.data ?? [])
+      return { staff: merged, total: merged.length }
+    },
+    enabled: ids.length > 0,
     staleTime: 60_000,
   })
 }
 
 export function useAssignWorkOrder() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, staffId, notes }: { orderId: string; staffId: string; notes?: string }) =>
       workOrderService.assign(communityId, orderId, staffId, notes),
     onSuccess: (_, { orderId }) => {
-      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-orders'] })
       queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
     },
   })
 }
 
 export function useAddComment() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, body }: { orderId: string; body: string }) =>
@@ -105,7 +113,7 @@ export function useAddComment() {
 }
 
 export function useUploadWorkOrderPhoto() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, imageUri, mimeType }: { orderId: string; imageUri: string; mimeType: string }) =>
@@ -117,7 +125,7 @@ export function useUploadWorkOrderPhoto() {
 }
 
 export function useRemoveWorkOrderPhoto() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ orderId, url }: { orderId: string; url: string }) =>

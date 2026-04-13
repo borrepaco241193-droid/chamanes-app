@@ -1,23 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { paymentService, type PaymentStatus } from '../services/payment.service'
 import { useAuthStore } from '../stores/auth.store'
-
-function useCommunityId() {
-  return useAuthStore((s) => s.user?.communityId ?? '')
-}
+import { useActiveCommunityIds, usePrimaryCommunityId } from './useActiveCommunityIds'
 
 export function usePayments(status?: PaymentStatus) {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   return useQuery({
-    queryKey: ['payments', communityId, status],
-    queryFn: () => paymentService.list(communityId, { status }),
-    enabled: !!communityId,
+    queryKey: ['payments', ids, status],
+    queryFn: async () => {
+      if (ids.length <= 1) return paymentService.list(ids[0] ?? '', { status })
+      const results = await Promise.allSettled(ids.map((id) => paymentService.list(id, { status })))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = fulfilled.flatMap((r) => r.payments ?? []).sort((a: any, b: any) => new Date(b.dueDate ?? b.createdAt).getTime() - new Date(a.dueDate ?? a.createdAt).getTime())
+      return { payments: merged, total: merged.length }
+    },
+    enabled: ids.length > 0,
     staleTime: 30_000,
   })
 }
 
 export function usePayment(paymentId: string) {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   return useQuery({
     queryKey: ['payment', communityId, paymentId],
     queryFn: () => paymentService.get(communityId, paymentId),
@@ -26,53 +29,58 @@ export function usePayment(paymentId: string) {
 }
 
 export function useCheckout() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (paymentId: string) => paymentService.getCheckoutUrl(communityId, paymentId),
     onSuccess: () => {
-      // Refetch payments after returning from checkout
-      queryClient.invalidateQueries({ queryKey: ['payments', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
     },
   })
 }
 
 // Returns true if the resident has any overdue or pending payments
 export function useHasPendingPayments() {
-  const communityId = useCommunityId()
+  const ids = useActiveCommunityIds()
   const { data, isLoading } = useQuery({
-    queryKey: ['payments', communityId, 'PENDING'],
-    queryFn: () => paymentService.list(communityId, { status: 'PENDING' }),
-    enabled: !!communityId,
+    queryKey: ['payments', ids, 'PENDING'],
+    queryFn: async () => {
+      if (ids.length <= 1) return paymentService.list(ids[0] ?? '', { status: 'PENDING' })
+      const results = await Promise.allSettled(ids.map((id) => paymentService.list(id, { status: 'PENDING' })))
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = fulfilled.flatMap((r) => r.payments ?? [])
+      return { payments: merged, total: merged.length }
+    },
+    enabled: ids.length > 0,
     staleTime: 60_000,
-    refetchInterval: 5 * 60_000, // auto-check every 5 min
+    refetchInterval: 5 * 60_000,
   })
   const hasPending = (data?.payments?.length ?? 0) > 0
   return { hasPending, isLoading }
 }
 
 export function usePaymentIntent() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   return useMutation({
     mutationFn: (paymentId: string) => paymentService.getPaymentIntent(communityId, paymentId),
   })
 }
 
 export function useGenerateFees() {
-  const communityId = useCommunityId()
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (data: { month: number; year: number; amount?: number }) =>
       paymentService.generateFees(communityId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payments', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
     },
   })
 }
 
 export function useCreateCharge() {
+  const communityId = usePrimaryCommunityId()
   const queryClient = useQueryClient()
-  const communityId = useAuthStore((s) => s.user?.communityId ?? '')
   return useMutation({
     mutationFn: (data: {
       unitId: string; amount: number; description: string
