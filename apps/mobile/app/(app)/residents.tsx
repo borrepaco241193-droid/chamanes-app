@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
-import { useResidents, useUnits, useCreateUnit, useCreateResident, useDeleteResident, useVerifyAdminOtp } from '../../src/hooks/useResidents'
+import { useResidents, useUnits, useCreateUnit, useCreateResident, useDeleteResident, useVerifyAdminOtp, useChangeRole } from '../../src/hooks/useResidents'
 import { useAuthStore } from '../../src/stores/auth.store'
 import type { Resident, OccupancyType } from '../../src/services/resident.service'
 import { useDebounce } from '../../src/hooks/useDebounce'
@@ -30,6 +30,28 @@ function useIsAdmin() {
 
 const OCCUPANCY_LABEL = { OWNER: 'Propietario', TENANT: 'Inquilino' }
 const OCCUPANCY_COLOR = { OWNER: '#3B82F6', TENANT: '#F59E0B' }
+
+const ROLE_LABEL: Record<string, string> = {
+  RESIDENT: 'Residente',
+  COMMUNITY_ADMIN: 'Administrador',
+  MANAGER: 'Manager',
+  GUARD: 'Guardia',
+  STAFF: 'Técnico',
+}
+const ROLE_COLOR: Record<string, string> = {
+  RESIDENT: '#64748B',
+  COMMUNITY_ADMIN: '#3B82F6',
+  MANAGER: '#8B5CF6',
+  GUARD: '#10B981',
+  STAFF: '#F59E0B',
+}
+const ALL_ROLE_OPTIONS: [string, string][] = [
+  ['RESIDENT', 'Residente'],
+  ['COMMUNITY_ADMIN', 'Administrador'],
+  ['MANAGER', 'Manager'],
+  ['GUARD', 'Guardia'],
+  ['STAFF', 'Técnico'],
+]
 
 function Field({ label, value, onChangeText, placeholder, keyboardType, autoCapitalize, secureTextEntry }: {
   label: string; value: string; onChangeText: (v: string) => void
@@ -369,13 +391,20 @@ function NewResidentModal({ visible, onClose, units }: { visible: boolean; onClo
 
 // ── Resident Card ─────────────────────────────────────────────
 
-function ResidentCard({ resident, onDelete }: { resident: Resident; onDelete: (r: Resident) => void }) {
+function ResidentCard({ resident, onDelete, onChangeRole }: {
+  resident: Resident
+  onDelete: (r: Resident) => void
+  onChangeRole: (r: Resident) => void
+}) {
   const communityId = useAuthStore((s) => s.user?.communityId ?? '')
   const unit = resident.units[0]
   const unitLabel = unit ? `${unit.block ? `${unit.block}-` : ''}${unit.number}` : '—'
   const occupancy = unit?.occupancyType ?? 'OWNER'
   const initial = (resident.user.firstName[0] ?? '?').toUpperCase()
   const hasPending = (resident.pendingPayments ?? 0) > 0
+  const role = resident.role ?? 'RESIDENT'
+  const roleColor = ROLE_COLOR[role] ?? '#64748B'
+  const roleLabel = ROLE_LABEL[role] ?? role
 
   return (
     <View style={{ backgroundColor: '#1E293B', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: hasPending ? '#F9731640' : '#334155', overflow: 'hidden' }}>
@@ -390,10 +419,17 @@ function ResidentCard({ resident, onDelete }: { resident: Resident; onDelete: (r
         <View style={{ flex: 1 }}>
           <Text style={{ color: 'white', fontWeight: '600', fontSize: 15 }}>{resident.user.firstName} {resident.user.lastName}</Text>
           <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: 2 }}>Unidad {unitLabel}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
             <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: `${OCCUPANCY_COLOR[occupancy]}20` }}>
               <Text style={{ color: OCCUPANCY_COLOR[occupancy], fontSize: 10, fontWeight: '600' }}>{OCCUPANCY_LABEL[occupancy]}</Text>
             </View>
+            <TouchableOpacity
+              onPress={() => onChangeRole(resident)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: `${roleColor}20`, borderWidth: 1, borderColor: `${roleColor}40` }}
+            >
+              <Text style={{ color: roleColor, fontSize: 10, fontWeight: '600' }}>{roleLabel}</Text>
+              <Ionicons name="chevron-down" size={9} color={roleColor} />
+            </TouchableOpacity>
             {hasPending && (
               <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#F9731620' }}>
                 <Text style={{ color: '#F97316', fontSize: 10, fontWeight: '600' }}>
@@ -438,8 +474,33 @@ export default function ResidentsScreen() {
     debouncedSearch ? { search: debouncedSearch } : undefined,
   )
   const { data: unitsData, refetch: refetchUnits } = useUnits()
+  const { mutateAsync: changeRole } = useChangeRole()
   const residents = data?.residents ?? []
   const units = unitsData?.units ?? []
+
+  function confirmChangeRole(resident: Resident) {
+    const currentRole = resident.role ?? 'RESIDENT'
+    Alert.alert(
+      `Cambiar rol — ${resident.user.firstName} ${resident.user.lastName}`,
+      `Rol actual: ${ROLE_LABEL[currentRole] ?? currentRole}`,
+      [
+        ...ALL_ROLE_OPTIONS
+          .filter(([k]) => k !== currentRole)
+          .map(([k, label]) => ({
+            text: label,
+            onPress: async () => {
+              try {
+                await changeRole({ userId: resident.id, role: k })
+                refetch()
+              } catch (err: any) {
+                Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo cambiar el rol')
+              }
+            },
+          })),
+        { text: 'Cancelar', style: 'cancel' as const },
+      ],
+    )
+  }
 
   function confirmDelete(resident: Resident) {
     Alert.alert(
@@ -507,7 +568,7 @@ export default function ResidentsScreen() {
         <FlatList
           data={residents}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <ResidentCard resident={item} onDelete={confirmDelete} />}
+          renderItem={({ item }) => <ResidentCard resident={item} onDelete={confirmDelete} onChangeRole={confirmChangeRole} />}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3B82F6" />}
           ListEmptyComponent={

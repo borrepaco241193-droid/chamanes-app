@@ -147,6 +147,11 @@ export const residentService = {
     return res.data as { ok: boolean; userId: string; communityUserId: string; tempPassword: string | null }
   },
 
+  async changeRole(communityId: string, userId: string, role: string) {
+    const res = await api.patch(`/communities/${communityId}/residents/${userId}/role`, { role })
+    return res.data as { ok: boolean; role: string }
+  },
+
   async deleteResident(communityId: string, userId: string) {
     const res = await api.delete(`/communities/${communityId}/residents/${userId}`)
     return res.data

@@ -745,6 +745,45 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── CHANGE ROLE ────────────────────────────────────────────
+  fastify.patch<{ Params: { communityId: string; userId: string }; Body: unknown }>(
+    '/:communityId/residents/:userId/role',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { communityId, userId } = req.params
+      const { role } = z.object({
+        role: z.enum(['RESIDENT', 'COMMUNITY_ADMIN', 'MANAGER', 'GUARD', 'STAFF']),
+      }).parse(req.body)
+
+      // Prevent changing own role (to avoid accidental self-demotion)
+      if (req.user.sub === userId) {
+        return reply.code(400).send({ error: 'BadRequest', message: 'No puedes cambiar tu propio rol' })
+      }
+
+      const cu = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId, communityId } },
+      })
+      if (!cu) return reply.code(404).send({ error: 'NotFound', message: 'Usuario no encontrado en esta comunidad' })
+
+      // Update community role
+      await fastify.prisma.communityUser.update({
+        where: { id: cu.id },
+        data: { role: role as UserRole },
+      })
+
+      // Sync globalRole: privileged community roles promote the global role
+      const newGlobalRole = (role === 'COMMUNITY_ADMIN' || role === 'MANAGER')
+        ? (role as UserRole)
+        : UserRole.RESIDENT
+      await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { globalRole: newGlobalRole },
+      })
+
+      return reply.send({ ok: true, role })
+    },
+  )
+
   // ── DELETE (deactivate) resident ───────────────────────────
   fastify.delete<{ Params: { communityId: string; userId: string } }>(
     '/:communityId/residents/:userId',

@@ -1,9 +1,17 @@
 'use client'
 import { useState } from 'react'
-import { useResidents, useCreateResident, useDeleteResident, useUnits, useUpdateResident } from '@/hooks/useResidents'
+import { useResidents, useCreateResident, useDeleteResident, useUnits, useUpdateResident, useChangeRole } from '@/hooks/useResidents'
 import { fullName, formatDate, ROLE_LABEL, ID_STATUS_COLOR, ID_STATUS_LABEL } from '@/lib/utils'
-import { Plus, Search, UserX, X, Users, Mail } from 'lucide-react'
+import { Plus, Search, UserX, X, Users, Mail, Shield } from 'lucide-react'
 import Image from 'next/image'
+
+const ROLE_OPTIONS = [
+  { value: 'RESIDENT', label: 'Residente' },
+  { value: 'COMMUNITY_ADMIN', label: 'Administrador' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'GUARD', label: 'Guardia' },
+  { value: 'STAFF', label: 'Técnico' },
+]
 
 export default function ResidentsPage() {
   const [search, setSearch] = useState('')
@@ -14,10 +22,21 @@ export default function ResidentsPage() {
   const deleteResident = useDeleteResident()
   const createResident = useCreateResident()
   const updateResident = useUpdateResident()
+  const changeRole = useChangeRole()
   const residents = data?.residents ?? []
 
   const [editEmailResident, setEditEmailResident] = useState<{ id: string; name: string; email: string } | null>(null)
   const [newEmail, setNewEmail] = useState('')
+  const [changeRoleResident, setChangeRoleResident] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [newRole, setNewRole] = useState('')
+
+  const handleChangeRole = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!changeRoleResident) return
+    await changeRole.mutateAsync({ userId: changeRoleResident.id, role: newRole })
+    setChangeRoleResident(null)
+    setNewRole('')
+  }
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editEmailResident) return
@@ -125,6 +144,13 @@ export default function ResidentsPage() {
                     <td className="table-td">
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT' }); setNewRole(r.role ?? 'RESIDENT') }}
+                          className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="Cambiar rol"
+                        >
+                          <Shield className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => { setEditEmailResident({ id: r.id, name: fullName(r.user), email: r.user?.email ?? '' }); setNewEmail(r.user?.email ?? '') }}
                           className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Cambiar correo"
@@ -205,6 +231,32 @@ export default function ResidentsPage() {
               <button type="button" onClick={() => { setEditEmailResident(null); setNewEmail('') }} className="btn-secondary flex-1">Cancelar</button>
               <button type="submit" disabled={updateResident.isPending} className="btn-primary flex-1">
                 {updateResident.isPending ? 'Guardando...' : 'Actualizar correo'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Change role modal */}
+      {changeRoleResident && (
+        <Modal title={`Cambiar rol — ${changeRoleResident.name}`} onClose={() => { setChangeRoleResident(null); setNewRole('') }}>
+          <form onSubmit={handleChangeRole} className="space-y-4">
+            <div>
+              <label className="label">Rol actual</label>
+              <p className="text-sm text-gray-500 mt-1">{ROLE_LABEL[changeRoleResident.role] ?? changeRoleResident.role}</p>
+            </div>
+            <div>
+              <label className="label">Nuevo rol</label>
+              <select className="input" value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                {ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" onClick={() => { setChangeRoleResident(null); setNewRole('') }} className="btn-secondary flex-1">Cancelar</button>
+              <button type="submit" disabled={changeRole.isPending || newRole === changeRoleResident.role} className="btn-primary flex-1">
+                {changeRole.isPending ? 'Guardando...' : 'Cambiar rol'}
               </button>
             </div>
           </form>

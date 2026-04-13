@@ -67,6 +67,16 @@ export function useDeleteResident() {
   })
 }
 
+export function useChangeRole() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.patch(`/communities/${activeCommunityId}/residents/${userId}/role`, { role }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['residents', activeCommunityId] }),
+  })
+}
+
 export function useUnits(withStats = false) {
   const { activeCommunityId, activeCommunityIds } = useAuthStore()
   const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])

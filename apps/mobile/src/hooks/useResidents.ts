@@ -55,6 +55,18 @@ export function useDeleteResident() {
   })
 }
 
+export function useChangeRole() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      residentService.changeRole(communityId, userId, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['residents', communityId] })
+    },
+  })
+}
+
 export function useUploadTransferProof() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()
