@@ -2,20 +2,72 @@
 import { useState } from 'react'
 import { useAllCommunities, useCreateCommunity } from '@/hooks/useCommunity'
 import { useAuthStore } from '@/store/auth.store'
-import { Building2, Plus, X } from 'lucide-react'
+import { Building2, Plus, X, ShieldCheck } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
+import api from '@/lib/api'
 
 export default function CommunitiesPage() {
-  const { user, setActiveCommunity } = useAuthStore()
+  const { user, setActiveCommunity, setAuth, tokens } = useAuthStore()
   const router = useRouter()
   const { data: communities, isLoading } = useAllCommunities()
   const create = useCreateCommunity()
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', address: '', city: '', state: '', country: 'MX', phone: '', email: '' })
+  const [claiming, setClaiming] = useState(false)
+  const [claimError, setClaimError] = useState('')
+
+  const isCommunityAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'MANAGER' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'MANAGER'
+
+  const handleClaimSuperAdmin = async () => {
+    setClaiming(true)
+    setClaimError('')
+    try {
+      const { data } = await api.post('/auth/claim-super-admin')
+      // Store new tokens and updated user — this resets JWT to SUPER_ADMIN role
+      setAuth(data.user, { accessToken: data.accessToken, refreshToken: data.refreshToken })
+      router.refresh()
+      window.location.reload()
+    } catch (err: any) {
+      setClaimError(err?.response?.data?.message ?? 'No se pudo reclamar el acceso')
+    } finally {
+      setClaiming(false)
+    }
+  }
 
   if (user?.role !== 'SUPER_ADMIN') {
-    return <div className="card p-8 text-center text-gray-400">Solo disponible para Super Admins.</div>
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Comunidades</h1>
+          <p className="text-gray-500 text-sm">Gestión de comunidades del sistema</p>
+        </div>
+        {isCommunityAdmin ? (
+          <div className="card p-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto">
+              <ShieldCheck className="w-8 h-8 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Acceso de Super Admin</h2>
+              <p className="text-gray-500 text-sm mt-1 max-w-sm mx-auto">
+                Tienes rol de administrador de comunidad. Si eres el primer administrador del sistema, puedes reclamar acceso completo de Super Admin.
+              </p>
+            </div>
+            {claimError && <p className="text-sm text-red-600">{claimError}</p>}
+            <button
+              onClick={handleClaimSuperAdmin}
+              disabled={claiming}
+              className="btn-primary mx-auto"
+            >
+              {claiming ? 'Verificando...' : 'Reclamar acceso de Super Admin'}
+            </button>
+            <p className="text-xs text-gray-400">Solo funciona si no existe ningún Super Admin en el sistema.</p>
+          </div>
+        ) : (
+          <div className="card p-8 text-center text-gray-400">Solo disponible para Super Admins.</div>
+        )}
+      </div>
+    )
   }
 
   const handleCreate = async (e: React.FormEvent) => {

@@ -13,6 +13,7 @@ import {
 } from '../../src/hooks/useCommunity'
 import { useAuthStore } from '../../src/stores/auth.store'
 import { authService } from '../../src/services/auth.service'
+import api from '../../src/lib/api'
 import type { Community, CommunityMember } from '../../src/services/community.service'
 
 // ── Field component ───────────────────────────────────────────
@@ -325,15 +326,33 @@ function CommunityCard({ community, isActive, onSelect, onManage }: {
 export default function CommunitiesScreen() {
   const user = useAuthStore((s) => s.user)
   const setCommunity = useAuthStore((s) => s.setCommunity)
+  const setAuth = useAuthStore((s) => s.setAuth)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  const isCommunityAdmin = user?.role === 'COMMUNITY_ADMIN' || user?.role === 'MANAGER' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.communityRole === 'MANAGER'
   // True when arriving here because no community is selected yet (first access)
   const isFirstSelect = isSuperAdmin && !user?.communityId
 
   const [showNew, setShowNew] = useState(false)
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
+  const [isClaiming, setIsClaiming] = useState(false)
 
   const { data, isLoading, isRefetching, refetch } = useCommunities()
   const setUser = useAuthStore((s) => s.setUser)
+
+  async function handleClaimSuperAdmin() {
+    setIsClaiming(true)
+    try {
+      const res = await api.post('/auth/claim-super-admin')
+      const { user: newUser, accessToken, refreshToken } = res.data
+      setAuth(newUser, { accessToken, refreshToken })
+      refetch()
+      Alert.alert('¡Listo!', 'Ahora tienes acceso de Super Admin. Verás todas las comunidades.')
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo reclamar el acceso')
+    } finally {
+      setIsClaiming(false)
+    }
+  }
 
   // On mount: call /auth/me directly (bypassing React Query cache) to always get
   // the freshest community list — critical when user is added to a new community
@@ -368,9 +387,30 @@ export default function CommunitiesScreen() {
   if (!canAccessCommunities && !isLoading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <Ionicons name="lock-closed-outline" size={48} color="#334155" />
-        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>Acceso restringido</Text>
-        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>No tienes múltiples comunidades asignadas.</Text>
+        <Ionicons name="shield-outline" size={48} color={isCommunityAdmin ? '#8B5CF6' : '#334155'} />
+        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>
+          {isCommunityAdmin ? 'Acceso de Super Admin' : 'Acceso restringido'}
+        </Text>
+        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+          {isCommunityAdmin
+            ? 'Eres administrador de comunidad. Si eres el primer administrador del sistema, puedes reclamar acceso completo.'
+            : 'No tienes múltiples comunidades asignadas.'}
+        </Text>
+        {isCommunityAdmin && (
+          <TouchableOpacity
+            onPress={handleClaimSuperAdmin}
+            disabled={isClaiming}
+            style={{ marginTop: 24, backgroundColor: '#8B5CF6', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 }}
+          >
+            {isClaiming
+              ? <ActivityIndicator color="white" />
+              : <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Reclamar acceso de Super Admin</Text>
+            }
+          </TouchableOpacity>
+        )}
+        <Text style={{ color: '#475569', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+          {isCommunityAdmin ? 'Solo funciona si no existe ningún Super Admin en el sistema.' : ''}
+        </Text>
       </SafeAreaView>
     )
   }

@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
+import { UserRole } from '@prisma/client'
 import { AuthService } from './auth.service.js'
 import {
   loginSchema,
@@ -10,6 +11,8 @@ import {
   changePasswordSchema,
   changeEmailSchema,
 } from './auth.schema.js'
+import { signAccessToken, signRefreshToken, parseExpiresIn } from '../../lib/tokens.js'
+import { env } from '../../config/env.js'
 
 // Validate with Zod and return 400 directly so the global error handler is bypassed
 // Uses name/issues checks instead of instanceof to avoid ESM cross-module boundary issues
@@ -230,6 +233,93 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
 
     return reply.send({ ok: true, idPhotoUrl })
+  })
+  // ── Bootstrap: claim SUPER_ADMIN if none exists ──────────
+  // Allows a COMMUNITY_ADMIN/MANAGER to become SUPER_ADMIN when the system
+  // has no SUPER_ADMIN yet. Returns fresh tokens so re-login is not needed.
+  fastify.post('/claim-super-admin', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    const callerId = req.user.sub
+    const callerRole = req.user.role
+
+    // Only COMMUNITY_ADMIN or MANAGER can call this (already have legit admin role)
+    if (callerRole !== UserRole.COMMUNITY_ADMIN && callerRole !== UserRole.MANAGER && callerRole !== UserRole.SUPER_ADMIN) {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Solo administradores de comunidad pueden reclamar este acceso' })
+    }
+
+    if (callerRole === UserRole.SUPER_ADMIN) {
+      return reply.code(400).send({ error: 'BadRequest', message: 'Ya eres Super Admin' })
+    }
+
+    // Check if any SUPER_ADMIN exists in the system
+    const existingSuperAdmin = await fastify.prisma.user.findFirst({
+      where: { globalRole: UserRole.SUPER_ADMIN, isActive: true },
+      select: { id: true },
+    })
+
+    if (existingSuperAdmin) {
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: 'Ya existe un Super Admin en el sistema. Pídele que te otorgue acceso.',
+      })
+    }
+
+    // No SUPER_ADMIN exists — promote this user
+    await fastify.prisma.user.update({
+      where: { id: callerId },
+      data: { globalRole: UserRole.SUPER_ADMIN },
+    })
+
+    // Fetch all communities for the new super admin
+    const allCommunities = await fastify.prisma.community.findMany({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, logoUrl: true },
+    })
+
+    // Issue fresh tokens with SUPER_ADMIN role
+    const firstCommunityId = allCommunities[0]?.id
+    const accessToken = signAccessToken({
+      sub: callerId,
+      email: req.user.email,
+      role: UserRole.SUPER_ADMIN,
+      communityId: firstCommunityId,
+      communityRole: undefined,
+    })
+
+    const refreshTokenValue = signRefreshToken()
+    const refreshExpiry = parseExpiresIn(env.JWT_REFRESH_EXPIRES_IN)
+    await fastify.prisma.refreshToken.create({
+      data: {
+        userId: callerId,
+        token: refreshTokenValue,
+        expiresAt: new Date(Date.now() + refreshExpiry * 1000),
+      },
+    })
+
+    const caller = await fastify.prisma.user.findUnique({
+      where: { id: callerId },
+      select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true, idVerified: true, idPhotoUrl: true },
+    })
+
+    return reply.send({
+      ok: true,
+      accessToken,
+      refreshToken: refreshTokenValue,
+      expiresIn: parseExpiresIn(env.JWT_EXPIRES_IN),
+      user: {
+        id: caller!.id,
+        email: caller!.email,
+        firstName: caller!.firstName,
+        lastName: caller!.lastName,
+        avatarUrl: caller!.avatarUrl,
+        role: 'SUPER_ADMIN',
+        communityId: firstCommunityId,
+        communityRole: undefined,
+        idVerified: caller!.idVerified,
+        idPhotoUploaded: !!caller!.idPhotoUrl,
+        communities: allCommunities.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logoUrl ?? null, role: 'SUPER_ADMIN' })),
+      },
+    })
   })
 }
 
