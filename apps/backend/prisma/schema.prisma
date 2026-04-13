@@ -139,6 +139,7 @@ model Community {
   visitorPasses  VisitorPass[]
   announcements  Announcement[]
   forumPosts     ForumPost[]
+  tasks          Task[]
 
   @@map("communities")
 }
@@ -180,6 +181,8 @@ model User {
   forumPosts      ForumPost[]
   forumComments   ForumComment[]
   forumLikes      ForumLike[]
+  assignedTasks   Task[]          @relation("AssignedTasks")
+  createdTasks    Task[]          @relation("CreatedTasks")
 
   @@map("users")
 }
@@ -684,4 +687,34 @@ model AuditLog {
   @@index([communityId, createdAt])
   @@index([userId, createdAt])
   @@map("audit_logs")
+}
+
+// ── Tasks ─────────────────────────────────────────────────────
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Task {
+  id           String       @id @default(cuid())
+  communityId  String
+  community    Community    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  status       TaskStatus   @default(PENDING)
+  priority     WorkOrderPriority @default(MEDIUM)
+  assigneeId   String?
+  assignee     User?        @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  creatorId    String
+  creator      User         @relation("CreatedTasks", fields: [creatorId], references: [id])
+  dueDate      DateTime?
+  completedAt  DateTime?
+  notifiedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("tasks")
 }

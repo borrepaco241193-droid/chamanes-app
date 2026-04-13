@@ -65,4 +65,18 @@ export const paymentService = {
     const res = await api.post(`/communities/${communityId}/payments/generate`, data)
     return res.data
   },
+
+  async createCharge(
+    communityId: string,
+    data: {
+      unitId: string
+      amount: number
+      description: string
+      type?: 'MAINTENANCE_FEE' | 'FINE' | 'RESERVATION_FEE' | 'OTHER'
+      dueDate?: string
+    },
+  ) {
+    const res = await api.post(`/communities/${communityId}/payments/charge`, data)
+    return res.data
+  },
 }

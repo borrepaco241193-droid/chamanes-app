@@ -95,6 +95,84 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Create individual charge (admin) ──────────────────────
+  fastify.post<{
+    Params: { communityId: string }
+    Body: {
+      unitId: string
+      amount: number
+      description: string
+      type?: string
+      dueDate?: string
+      notes?: string
+    }
+  }>(
+    '/:communityId/payments/charge',
+    {
+      preHandler: [
+        fastify.authenticate,
+        fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER),
+      ],
+    },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const { unitId, amount, description, type = 'OTHER', dueDate, notes } = req.body as any
+
+      if (!unitId || !amount || !description) {
+        return reply.code(400).send({ error: 'unitId, amount y description son requeridos' })
+      }
+      if (amount <= 0) {
+        return reply.code(400).send({ error: 'El monto debe ser mayor a 0' })
+      }
+
+      // Find the resident of the unit
+      const unit = await fastify.prisma.unit.findFirst({
+        where: { id: unitId, communityId },
+        include: {
+          communityUsers: {
+            where: { isActive: true },
+            include: { user: { select: { id: true, firstName: true, lastName: true } } },
+            take: 1,
+          },
+        },
+      })
+
+      if (!unit) {
+        return reply.code(404).send({ error: 'Unidad no encontrada' })
+      }
+
+      const residentUser = unit.communityUsers[0]?.user
+      const userId = residentUser?.id
+
+      const community = await fastify.prisma.community.findUnique({
+        where: { id: communityId },
+        select: { currency: true },
+      })
+
+      const payment = await fastify.prisma.payment.create({
+        data: {
+          communityId,
+          unitId,
+          userId: userId ?? req.user.sub,
+          amount,
+          currency: community?.currency ?? 'MXN',
+          type: type as any,
+          description,
+          status: 'PENDING',
+          dueDate: dueDate ? new Date(dueDate) : null,
+          periodMonth: new Date().getMonth() + 1,
+          periodYear: new Date().getFullYear(),
+        },
+        include: {
+          unit: { select: { number: true, block: true } },
+          user: { select: { firstName: true, lastName: true, email: true } },
+        },
+      })
+
+      return reply.code(201).send({ payment, message: 'Cargo creado correctamente' })
+    },
+  )
+
   // ── Create Stripe Checkout Session (fallback/web) ────────
   fastify.post<{ Params: { communityId: string; paymentId: string }; Body: unknown }>(
     '/:communityId/payments/:paymentId/checkout',

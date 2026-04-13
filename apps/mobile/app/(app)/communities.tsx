@@ -334,15 +334,25 @@ export default function CommunitiesScreen() {
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
 
   const { data, isLoading, isRefetching, refetch } = useCommunities()
-  // SUPER_ADMIN fetches all communities from API; others use their own list from login
+
+  // Build communities list:
+  // For SUPER_ADMIN: merge API results with communities from auth store (login/me response)
+  // so we always show all communities even while API is loading or stale
+  const apiCommunities: Community[] = isSuperAdmin ? (data?.communities ?? []) : []
+  const authStoreList: Community[] = (user?.communities ?? []).map((c) => ({
+    id: c.id, name: c.name, city: '', state: '', country: '', address: '',
+    phone: null, email: null, logoUrl: (c as any).logoUrl ?? null, timezone: '',
+    currency: '', totalUnits: 0, isActive: true, settings: {} as any,
+  }))
+
+  // Merge: API data takes priority (has full fields); auth store fills gaps
+  const mergedMap = new Map<string, Community>()
+  authStoreList.forEach((c) => mergedMap.set(c.id, c))
+  apiCommunities.forEach((c) => mergedMap.set(c.id, c)) // API overwrites if present
+
   const communities: Community[] = isSuperAdmin
-    ? (data?.communities ?? [])
-    : (user?.communities?.map((c) => ({
-        id: c.id, name: c.name, city: '', state: '', country: '', address: '',
-        phone: null, email: null, logoUrl: c.logoUrl ?? null, timezone: '',
-        currency: '', totalUnits: 0, isActive: true,
-        settings: {} as any,
-      })) ?? [])
+    ? Array.from(mergedMap.values())
+    : authStoreList
 
   if (!canAccessCommunities) {
     return (

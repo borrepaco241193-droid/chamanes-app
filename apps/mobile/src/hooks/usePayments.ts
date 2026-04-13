@@ -69,3 +69,15 @@ export function useGenerateFees() {
     },
   })
 }
+
+export function useCreateCharge() {
+  const queryClient = useQueryClient()
+  const communityId = useAuthStore((s) => s.user?.communityId ?? '')
+  return useMutation({
+    mutationFn: (data: {
+      unitId: string; amount: number; description: string
+      type?: 'MAINTENANCE_FEE' | 'FINE' | 'RESERVATION_FEE' | 'OTHER'; dueDate?: string
+    }) => paymentService.createCharge(communityId, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['payments'] }),
+  })
+}

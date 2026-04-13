@@ -26,6 +26,7 @@ import notificationRoutes from './modules/notifications/notification.routes.js'
 import gateRoutes from './modules/gate/gate.routes.js'
 import residentRoutes from './modules/residents/resident.routes.js'
 import forumRoutes from './modules/forum/forum.routes.js'
+import taskRoutes from './modules/tasks/task.routes.js'
 
 export async function buildApp() {
   const app = Fastify({
@@ -135,6 +136,7 @@ export async function buildApp() {
   await app.register(gateRoutes, { prefix: '/api/v1/communities' })
   await app.register(residentRoutes, { prefix: '/api/v1/communities' })
   await app.register(forumRoutes, { prefix: '/api/v1/communities' })
+  await app.register(taskRoutes, { prefix: '/api/v1/communities' })
 
   // ── Error handler ─────────────────────────────────────────
   app.setErrorHandler((err, req, reply) => {

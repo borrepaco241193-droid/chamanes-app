@@ -7,7 +7,6 @@ import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { useState } from 'react'
 import * as ImagePicker from 'expo-image-picker'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import api from '../../src/lib/api'
 
 // ── Main Screen ───────────────────────────────────────────────
@@ -58,7 +57,6 @@ export default function VerifyIdentityScreen() {
     if (!photo) return
     setUploading(true)
     try {
-      const token = await AsyncStorage.getItem('access-token')
       const formData = new FormData()
       formData.append('file', {
         uri: photo.uri,
@@ -67,10 +65,7 @@ export default function VerifyIdentityScreen() {
       } as any)
 
       await api.post('/auth/upload-id', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
 
       setDone(true)

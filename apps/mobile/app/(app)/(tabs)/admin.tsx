@@ -585,6 +585,23 @@ export default function AdminScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              onPress={() => router.push('/(app)/tasks' as any)}
+              className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
+              activeOpacity={0.75}
+            >
+              <View className="w-10 h-10 rounded-xl bg-blue-500/20 items-center justify-center">
+                <Ionicons name="checkmark-done-outline" size={20} color="#3B82F6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-semibold text-base">Tareas</Text>
+                <Text className="text-surface-muted text-xs mt-0.5">
+                  Gestionar y asignar tareas al personal
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#475569" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={() => router.push('/(app)/reports' as any)}
               className="bg-surface-card border border-surface-border rounded-2xl p-4 flex-row items-center gap-4"
               activeOpacity={0.75}

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, Home, CreditCard, Calendar,
   MapPin, UserCog, ClipboardList, QrCode, DoorOpen,
   ShieldCheck, BarChart3, Settings, LogOut, Shield, Building2,
-  MessageSquare, ChevronDown, Bell,
+  MessageSquare, ChevronDown, Bell, CheckSquare,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -21,6 +21,7 @@ const navItems = [
   { href: '/dashboard/areas', label: 'Áreas Comunes', icon: MapPin },
   { href: '/dashboard/staff', label: 'Personal', icon: UserCog },
   { href: '/dashboard/workorders', label: 'Órdenes de trabajo', icon: ClipboardList },
+  { href: '/dashboard/tasks', label: 'Tareas', icon: CheckSquare },
   { href: '/dashboard/visitors', label: 'Visitantes', icon: QrCode },
   { href: '/dashboard/gate', label: 'Control de acceso', icon: DoorOpen },
   { href: '/dashboard/verifications', label: 'Verificaciones', icon: ShieldCheck },
