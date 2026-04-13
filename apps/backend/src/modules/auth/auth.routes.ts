@@ -58,20 +58,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     const user = await service.getMe(req.user.sub)
     const communityUsers = (user as any).communityUsers ?? []
     let communities: any[]
-    if (communityUsers.length > 0) {
-      communities = communityUsers.map((cu: any) => ({
-        id: cu.communityId,
-        name: cu.community.name,
-        logoUrl: cu.community.logoUrl ?? null,
-        role: cu.role,
-      }))
-    } else if (req.user.role === 'SUPER_ADMIN') {
+    if (req.user.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN always gets ALL communities regardless of communityUser rows
       const allCommunities = await fastify.prisma.community.findMany({
         where: { isActive: true },
         orderBy: { createdAt: 'asc' },
         select: { id: true, name: true, logoUrl: true },
       })
       communities = allCommunities.map((c) => ({ id: c.id, name: c.name, logoUrl: c.logoUrl ?? null, role: 'SUPER_ADMIN' }))
+    } else if (communityUsers.length > 0) {
+      communities = communityUsers.map((cu: any) => ({
+        id: cu.communityId,
+        name: cu.community.name,
+        logoUrl: cu.community.logoUrl ?? null,
+        role: cu.role,
+      }))
     } else {
       communities = []
     }

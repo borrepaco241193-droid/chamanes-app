@@ -76,10 +76,10 @@ export class AuthService {
     // Determine active community context
     let activeCommunity = user.communityUsers[0]
 
-    // SUPER_ADMIN may have no CommunityUser rows — fetch all communities for context
+    // SUPER_ADMIN always gets ALL communities (regardless of communityUser rows)
     let superAdminCommunityId: string | undefined
     let superAdminCommunities: Array<{ id: string; name: string; logoUrl: string | null }> = []
-    if (user.globalRole === 'SUPER_ADMIN' && user.communityUsers.length === 0) {
+    if (user.globalRole === 'SUPER_ADMIN') {
       superAdminCommunities = await this.prisma.community.findMany({
         where: { isActive: true },
         orderBy: { createdAt: 'asc' },
@@ -143,18 +143,18 @@ export class AuthService {
         communityRole: activeCommunity?.role,
         idVerified: user.idVerified,
         idPhotoUploaded: !!user.idPhotoUrl,
-        communities: user.communityUsers.length > 0
-          ? user.communityUsers.map((cu) => ({
-              id: cu.communityId,
-              name: cu.community.name,
-              logoUrl: cu.community.logoUrl,
-              role: cu.role,
-            }))
-          : superAdminCommunities.map((c) => ({
+        communities: user.globalRole === 'SUPER_ADMIN'
+          ? superAdminCommunities.map((c) => ({
               id: c.id,
               name: c.name,
               logoUrl: c.logoUrl,
               role: 'SUPER_ADMIN' as any,
+            }))
+          : user.communityUsers.map((cu) => ({
+              id: cu.communityId,
+              name: cu.community.name,
+              logoUrl: cu.community.logoUrl,
+              role: cu.role,
             })),
       },
     }

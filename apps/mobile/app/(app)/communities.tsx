@@ -325,8 +325,6 @@ export default function CommunitiesScreen() {
   const user = useAuthStore((s) => s.user)
   const setCommunity = useAuthStore((s) => s.setCommunity)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
-  const hasMultipleCommunities = (user?.communities?.length ?? 0) > 1
-  const canAccessCommunities = isSuperAdmin || hasMultipleCommunities
   // True when arriving here because no community is selected yet (first access)
   const isFirstSelect = isSuperAdmin && !user?.communityId
 
@@ -336,25 +334,26 @@ export default function CommunitiesScreen() {
   const { data, isLoading, isRefetching, refetch } = useCommunities()
 
   // Build communities list:
-  // For SUPER_ADMIN: merge API results with communities from auth store (login/me response)
-  // so we always show all communities even while API is loading or stale
-  const apiCommunities: Community[] = isSuperAdmin ? (data?.communities ?? []) : []
+  // Merge API results (which always come back fresh) with auth store (instant, from cache).
+  // API data takes priority (has full fields); auth store fills in while API loads.
+  const apiCommunities: Community[] = data?.communities ?? []
   const authStoreList: Community[] = (user?.communities ?? []).map((c) => ({
     id: c.id, name: c.name, city: '', state: '', country: '', address: '',
     phone: null, email: null, logoUrl: (c as any).logoUrl ?? null, timezone: '',
     currency: '', totalUnits: 0, isActive: true, settings: {} as any,
   }))
 
-  // Merge: API data takes priority (has full fields); auth store fills gaps
+  // Merge: auth store fills gap immediately; API enriches when ready
   const mergedMap = new Map<string, Community>()
   authStoreList.forEach((c) => mergedMap.set(c.id, c))
-  apiCommunities.forEach((c) => mergedMap.set(c.id, c)) // API overwrites if present
+  apiCommunities.forEach((c) => mergedMap.set(c.id, c))
+  const communities: Community[] = Array.from(mergedMap.values())
 
-  const communities: Community[] = isSuperAdmin
-    ? Array.from(mergedMap.values())
-    : authStoreList
+  // Allow access if SUPER_ADMIN, or if auth store OR live API shows >1 community
+  const effectiveCount = Math.max(communities.length, authStoreList.length, apiCommunities.length)
+  const canAccessCommunities = isSuperAdmin || effectiveCount > 1
 
-  if (!canAccessCommunities) {
+  if (!canAccessCommunities && !isLoading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <Ionicons name="lock-closed-outline" size={48} color="#334155" />
@@ -419,7 +418,7 @@ export default function CommunitiesScreen() {
         </Text>
       </View>
 
-      {isLoading ? (
+      {isLoading && communities.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator color="#3B82F6" size="large" />
         </View>
@@ -436,14 +435,16 @@ export default function CommunitiesScreen() {
             />
           )}
           contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3B82F6" />}
+          refreshControl={<RefreshControl refreshing={isRefetching || isLoading} onRefresh={refetch} tintColor="#3B82F6" />}
           ListEmptyComponent={
             <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }}>
               <Ionicons name="business-outline" size={48} color="#334155" />
               <Text style={{ color: '#64748B', fontSize: 16, marginTop: 12 }}>Sin comunidades registradas</Text>
-              <TouchableOpacity onPress={() => setShowNew(true)} style={{ marginTop: 16, backgroundColor: '#3B82F6', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
-                <Text style={{ color: 'white', fontWeight: '600' }}>Crear primera comunidad</Text>
-              </TouchableOpacity>
+              {isSuperAdmin && (
+                <TouchableOpacity onPress={() => setShowNew(true)} style={{ marginTop: 16, backgroundColor: '#3B82F6', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}>
+                  <Text style={{ color: 'white', fontWeight: '600' }}>Crear primera comunidad</Text>
+                </TouchableOpacity>
+              )}
             </View>
           }
         />
