@@ -129,15 +129,16 @@ model Community {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  units         Unit[]
+  units          Unit[]
   communityUsers CommunityUser[]
-  commonAreas   CommonArea[]
-  accessEvents  AccessEvent[]
-  payments      Payment[]
-  staff         Staff[]
-  workOrders    WorkOrder[]
-  visitorPasses VisitorPass[]
-  announcements Announcement[]
+  commonAreas    CommonArea[]
+  accessEvents   AccessEvent[]
+  payments       Payment[]
+  staff          Staff[]
+  workOrders     WorkOrder[]
+  visitorPasses  VisitorPass[]
+  announcements  Announcement[]
+  forumPosts     ForumPost[]
 
   @@map("communities")
 }
@@ -160,20 +161,25 @@ model User {
   resetTokenExpiresAt DateTime?
   lastLoginAt  DateTime?
   pushToken    String?   // Expo push token for notifications
-  idPhotoUrl   String?   // Official ID photo uploaded by user for identity verification
-  idVerified   Boolean   @default(false) // Set to true by admin after reviewing idPhotoUrl
+  idPhotoUrl            String?   // Official ID photo uploaded by user for identity verification
+  idVerified            Boolean   @default(false) // Set to true by admin after reviewing idPhotoUrl
+  idVerificationStatus  String    @default("NOT_SUBMITTED") // NOT_SUBMITTED | PENDING | APPROVED | REJECTED
+  idVerificationNote    String?   // Optional note from admin when rejecting
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  communityUsers CommunityUser[]
-  visitorPasses  VisitorPass[]
-  reservations   Reservation[]
-  payments       Payment[]
-  refreshTokens  RefreshToken[]
-  notifications  Notification[]
-  staffProfile   Staff?
-  auditLogs      AuditLog[]
-  adminOtp       AdminOtp?
+  communityUsers  CommunityUser[]
+  visitorPasses   VisitorPass[]
+  reservations    Reservation[]
+  payments        Payment[]
+  refreshTokens   RefreshToken[]
+  notifications   Notification[]
+  staffProfile    Staff?
+  auditLogs       AuditLog[]
+  adminOtp        AdminOtp?
+  forumPosts      ForumPost[]
+  forumComments   ForumComment[]
+  forumLikes      ForumLike[]
 
   @@map("users")
 }
@@ -557,6 +563,53 @@ model Announcement {
 
   @@index([communityId, publishAt])
   @@map("announcements")
+}
+
+// ── Community Forum ───────────────────────────────────────────
+
+model ForumPost {
+  id          String    @id @default(cuid())
+  communityId String
+  authorId    String
+  body        String
+  imageUrl    String?
+  likesCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  community Community    @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  author    User         @relation(fields: [authorId], references: [id])
+  comments  ForumComment[]
+  likes     ForumLike[]
+
+  @@index([communityId, createdAt])
+  @@map("forum_posts")
+}
+
+model ForumComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  post   ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User      @relation(fields: [authorId], references: [id])
+
+  @@map("forum_comments")
+}
+
+model ForumLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+  @@map("forum_likes")
 }
 
 // ── Auth & Security ───────────────────────────────────────────
