@@ -104,4 +104,18 @@ export const reservationService = {
     })
     return res.data
   },
+
+  async createArea(communityId: string, data: Partial<CommonArea>): Promise<CommonArea> {
+    const res = await api.post(`/communities/${communityId}/common-areas`, data)
+    return res.data
+  },
+
+  async updateArea(communityId: string, areaId: string, data: Partial<CommonArea>): Promise<CommonArea> {
+    const res = await api.patch(`/communities/${communityId}/common-areas/${areaId}`, data)
+    return res.data
+  },
+
+  async deleteArea(communityId: string, areaId: string): Promise<void> {
+    await api.delete(`/communities/${communityId}/common-areas/${areaId}`)
+  },
 }

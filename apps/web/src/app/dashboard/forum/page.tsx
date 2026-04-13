@@ -7,40 +7,57 @@ import { timeAgo, fullName } from '@/lib/utils'
 import { MessageSquare, Heart, Trash2, Plus, X } from 'lucide-react'
 
 function usePosts() {
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   return useQuery({
-    queryKey: ['forum-posts', activeCommunityId],
+    queryKey: ['forum-posts', ids],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${activeCommunityId}/forum/posts?limit=50`)
-      return data.posts ?? []
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/forum/posts?limit=50`)
+        return data.posts ?? []
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/forum/posts?limit=50`).then((r) => ({ communityId: id, posts: r.data.posts ?? [] })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = results.flatMap((r) => (r.posts ?? []).map((p: any) => ({ ...p, _communityId: r.communityId })))
+      merged.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return merged
     },
-    enabled: !!activeCommunityId,
+    enabled: ids.length > 0,
   })
 }
 
 function useCreatePost() {
   const qc = useQueryClient()
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
   return useMutation({
-    mutationFn: (body: object) => api.post(`/communities/${activeCommunityId}/forum/posts`, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts', activeCommunityId] }),
+    mutationFn: (body: object) => api.post(`/communities/${communityId}/forum/posts`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts'] }),
   })
 }
 
 function useDeletePost() {
   const qc = useQueryClient()
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
   return useMutation({
-    mutationFn: (postId: string) => api.delete(`/communities/${activeCommunityId}/forum/posts/${postId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts', activeCommunityId] }),
+    mutationFn: ({ postId, postCommunityId }: { postId: string; postCommunityId?: string }) =>
+      api.delete(`/communities/${postCommunityId ?? communityId}/forum/posts/${postId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['forum-posts'] }),
   })
 }
 
 export default function ForumPage() {
   const { data: posts, isLoading } = usePosts()
   const deletePost = useDeletePost()
+  const { activeCommunityIds, user } = useAuthStore()
+  // Build a communityId → name map from the user's communities
+  const communityMap = Object.fromEntries(
+    (user?.communities ?? []).map((c: any) => [c.id, c.name])
+  )
   const createPost = useCreatePost()
-  const { user } = useAuthStore()
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.role === 'COMMUNITY_ADMIN'
 
   const [showCreate, setShowCreate] = useState(false)
@@ -121,14 +138,21 @@ export default function ForumPage() {
                   <p className="text-xs text-gray-400">{timeAgo(post.createdAt)}</p>
                 </div>
               </div>
-              {isAdmin && (
-                <button
-                  onClick={() => { if (confirm('¿Eliminar esta publicación?')) deletePost.mutate(post.id) }}
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {post._communityId && activeCommunityIds.length > 1 && (
+                  <span className="text-xs bg-brand-50 text-brand-600 border border-brand-100 px-2 py-0.5 rounded-full font-medium">
+                    {communityMap[post._communityId] ?? 'Comunidad'}
+                  </span>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={() => { if (confirm('¿Eliminar esta publicación?')) deletePost.mutate({ postId: post.id, postCommunityId: post._communityId ?? post.communityId }) }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-gray-700 text-sm leading-relaxed">{post.body}</p>
             {post.imageUrl && (

@@ -23,14 +23,22 @@ export function useDeleteStaff() {
 }
 
 export function useStaff() {
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   return useQuery({
-    queryKey: ['staff', activeCommunityId],
+    queryKey: ['staff', ids],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${activeCommunityId}/staff`)
-      return data.staff ?? data
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/staff`)
+        return data.staff ?? data
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/staff`).then((r) => ({ communityId: id, staff: r.data.staff ?? r.data })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      return results.flatMap((r) => (r.staff ?? []).map((s: any) => ({ ...s, _communityId: r.communityId })))
     },
-    enabled: !!activeCommunityId,
+    enabled: ids.length > 0,
   })
 }
 
@@ -101,15 +109,25 @@ export function useRevokeVisitorPass() {
 }
 
 export function useVisitorPasses(status?: string) {
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   return useQuery({
-    queryKey: ['visitors', activeCommunityId, status],
+    queryKey: ['visitors', ids, status],
     queryFn: async () => {
       const params = status && status !== 'ALL' ? `?status=${status}` : ''
-      const { data } = await api.get(`/communities/${activeCommunityId}/visitors${params}`)
-      return data.passes ?? data
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/visitors${params}`)
+        return data.passes ?? data
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/visitors${params}`).then((r) => ({ communityId: id, passes: r.data.passes ?? r.data })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = results.flatMap((r) => (r.passes ?? []).map((p: any) => ({ ...p, _communityId: r.communityId })))
+      merged.sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+      return merged
     },
-    enabled: !!activeCommunityId,
+    enabled: ids.length > 0,
   })
 }
 

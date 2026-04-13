@@ -1,5 +1,5 @@
 import { Share, Alert } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
 import Constants from 'expo-constants'
 
 const API_URL =
@@ -23,7 +23,7 @@ export async function downloadAndShareCSV(
   from?: string,
   to?: string,
 ) {
-  const token = await AsyncStorage.getItem('access-token')
+  const token = await SecureStore.getItemAsync('access-token')
   if (!token) throw new Error('Sin sesión activa')
 
   const params = new URLSearchParams()

@@ -41,6 +41,9 @@ export function handleNotificationResponse(
     case 'work_order':
       router.push('/(app)/(tabs)/workorders')
       break
+    case 'id_verification':
+      router.push('/(app)/verify-identity')
+      break
     case 'announcement':
     default:
       router.push('/(app)/(tabs)/')
@@ -76,7 +79,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#3B82F6',
-      sound: 'default',
+      sound: false,
     })
 
     // Visitor alarm channel — high importance + alarm sound
@@ -86,7 +89,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 400, 200, 400, 200, 400],
       lightColor: '#22C55E',
-      sound: 'default',
+      sound: false,
       bypassDnd: false,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     })
@@ -98,12 +101,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 300, 150, 300],
       lightColor: '#EF4444',
-      sound: 'default',
+      sound: false,
     })
   }
 
   try {
-    const tokenData = await Notifications.getExpoPushTokenAsync()
+    // projectId must be passed explicitly in SDK 55+ for production builds
+    const tokenData = await Notifications.getExpoPushTokenAsync({
+      projectId: '54edd6d7-1120-4360-a153-154b1f178ba5',
+    })
     await notificationService.registerPushToken(tokenData.data)
     return tokenData.data
   } catch (err) {

@@ -69,6 +69,15 @@ export const workOrderService = {
     return res.data
   },
 
+  async update(
+    communityId: string,
+    orderId: string,
+    data: { priority?: string; status?: string; title?: string; location?: string },
+  ): Promise<WorkOrder> {
+    const res = await api.patch(`/communities/${communityId}/work-orders/${orderId}`, data)
+    return res.data
+  },
+
   async assign(
     communityId: string,
     orderId: string,

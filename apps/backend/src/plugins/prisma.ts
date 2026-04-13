@@ -30,7 +30,19 @@ const prismaPlugin: FastifyPluginAsync = fp(async (fastify) => {
   await prisma.$connect()
   fastify.decorate('prisma', prisma)
 
+  // Keep-alive: ping every 4 minutes so Railway doesn't close idle connections
+  // Railway's PostgreSQL drops idle connections after ~5 minutes
+  const keepAlive = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+    } catch {
+      // Reconnect silently
+      try { await prisma.$connect() } catch {}
+    }
+  }, 4 * 60 * 1000)
+
   fastify.addHook('onClose', async () => {
+    clearInterval(keepAlive)
     await prisma.$disconnect()
   })
 })

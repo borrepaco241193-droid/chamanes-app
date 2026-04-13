@@ -57,10 +57,12 @@ export function useReservations(status?: string) {
         return data.reservations ?? data
       }
       const settled = await Promise.allSettled(
-        ids.map((id) => api.get(`/communities/${id}/reservations${params}`).then((r) => r.data))
+        ids.map((id) => api.get(`/communities/${id}/reservations${params}`).then((r) => ({ communityId: id, data: r.data })))
       )
       const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      return results.flatMap((r) => r.reservations ?? [])
+      const merged = results.flatMap((r) => (r.data.reservations ?? []).map((res: any) => ({ ...res, _communityId: r.communityId })))
+      merged.sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      return merged
     },
     enabled: ids.length > 0,
   })

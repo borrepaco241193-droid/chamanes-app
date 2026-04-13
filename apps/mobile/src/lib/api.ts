@@ -1,11 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
 import Constants from 'expo-constants'
 
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
   Constants.expoConfig?.extra?.apiUrl ??
-  'http://192.168.1.76:3000'
+  'http://192.168.1.77:3000'
 
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
@@ -18,8 +18,8 @@ export const api = axios.create({
 
 // ── Request interceptor ───────────────────────────────────────
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const token = await AsyncStorage.getItem('access-token')
-if (token) {
+  const token = await SecureStore.getItemAsync('access-token')
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -35,7 +35,7 @@ api.interceptors.response.use(
       original._retry = true
 
       try {
-        const refresh = await AsyncStorage.getItem('refresh-token')
+        const refresh = await SecureStore.getItemAsync('refresh-token')
         if (!refresh) throw new Error('no refresh token')
 
         const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, {
@@ -43,14 +43,14 @@ api.interceptors.response.use(
         })
         const tokens = data?.data ?? data
 
-        await AsyncStorage.setItem('access-token', tokens.accessToken)
-        await AsyncStorage.setItem('refresh-token', tokens.refreshToken)
+        await SecureStore.setItemAsync('access-token', tokens.accessToken)
+        await SecureStore.setItemAsync('refresh-token', tokens.refreshToken)
 
         original.headers.Authorization = `Bearer ${tokens.accessToken}`
         return api(original)
       } catch {
-        await AsyncStorage.removeItem('access-token')
-        await AsyncStorage.removeItem('refresh-token')
+        await SecureStore.deleteItemAsync('access-token')
+        await SecureStore.deleteItemAsync('refresh-token')
         return Promise.reject(error)
       }
     }

@@ -57,6 +57,8 @@ export interface AuthUser {
   role: UserRole
   communityId?: string
   communityRole?: UserRole
+  /** All communities this user belongs to (populated at login) */
+  communities?: Array<{ id: string; name: string; role: string; logoUrl?: string }>
 }
 
 // ── Community ─────────────────────────────────────────────────

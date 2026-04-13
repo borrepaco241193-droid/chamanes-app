@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   useReservations, useUpdateReservation, useApproveReservation, useCreateReservation, useAreas,
 } from '@/hooks/useReservations'
+import { useAuthStore } from '@/store/auth.store'
 import { formatDate, RESERVATION_STATUS_COLOR, RESERVATION_STATUS_LABEL, fullName } from '@/lib/utils'
 import {
   Calendar, CheckCircle, XCircle, X, List, ChevronLeft, ChevronRight, Plus,
@@ -22,6 +23,15 @@ const STATUS_DOT: Record<string, string> = {
   COMPLETED: 'bg-blue-400',
   NO_SHOW:   'bg-gray-400',
 }
+
+// Colors used to distinguish communities in the calendar
+const COMMUNITY_COLORS = [
+  { bg: 'bg-brand-500',  text: 'text-brand-700',  badge: 'bg-brand-100 text-brand-700 border-brand-200' },
+  { bg: 'bg-violet-500', text: 'text-violet-700',  badge: 'bg-violet-100 text-violet-700 border-violet-200' },
+  { bg: 'bg-amber-500',  text: 'text-amber-700',   badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { bg: 'bg-rose-500',   text: 'text-rose-700',    badge: 'bg-rose-100 text-rose-700 border-rose-200' },
+  { bg: 'bg-teal-500',   text: 'text-teal-700',    badge: 'bg-teal-100 text-teal-700 border-teal-200' },
+]
 
 // ── Approve Modal ────────────────────────────────────────────
 
@@ -161,8 +171,8 @@ function CreateReservationModal({ defaultDate, areas, onClose, create }: {
 // ── Calendar View ────────────────────────────────────────────
 
 function CalendarView({
-  reservations, approve, update, areas, create,
-}: { reservations: any[]; approve: any; update: any; areas: any[]; create: any }) {
+  reservations, approve, update, areas, create, communityIds, communityMap,
+}: { reservations: any[]; approve: any; update: any; areas: any[]; create: any; communityIds: string[]; communityMap: Record<string, string> }) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [approveModal, setApproveModal] = useState<any>(null)
@@ -233,11 +243,15 @@ function CalendarView({
                   {format(day, 'd')}
                 </div>
                 <div className="space-y-0.5">
-                  {dayRes.slice(0, 3).map((r) => (
-                    <div key={r.id} className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate text-white ${STATUS_DOT[r.status] ?? 'bg-gray-400'}`}>
-                      {r.commonArea?.name ?? ''}
-                    </div>
-                  ))}
+                  {dayRes.slice(0, 3).map((r) => {
+                    const cIdx = communityIds.length > 1 ? communityIds.indexOf(r._communityId ?? '') : -1
+                    const color = cIdx >= 0 ? COMMUNITY_COLORS[cIdx % COMMUNITY_COLORS.length].bg : STATUS_DOT[r.status] ?? 'bg-gray-400'
+                    return (
+                      <div key={r.id} className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate text-white ${color}`}>
+                        {r.commonArea?.name ?? ''}
+                      </div>
+                    )
+                  })}
                   {dayRes.length > 3 && <p className="text-[10px] text-gray-400">+{dayRes.length - 3} más</p>}
                 </div>
               </div>
@@ -246,12 +260,21 @@ function CalendarView({
         </div>
 
         <div className="px-5 py-2 border-t border-gray-100 flex flex-wrap gap-3">
-          {Object.entries(RESERVATION_STATUS_LABEL).map(([k, v]) => (
-            <div key={k} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[k]}`} />
-              {v}
-            </div>
-          ))}
+          {communityIds.length > 1 ? (
+            communityIds.map((id, i) => (
+              <div key={id} className="flex items-center gap-1.5 text-xs text-gray-500">
+                <span className={`w-2.5 h-2.5 rounded-full ${COMMUNITY_COLORS[i % COMMUNITY_COLORS.length].bg}`} />
+                {communityMap[id] ?? 'Comunidad'}
+              </div>
+            ))
+          ) : (
+            Object.entries(RESERVATION_STATUS_LABEL).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1.5 text-xs text-gray-500">
+                <span className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[k]}`} />
+                {v}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -274,11 +297,22 @@ function CalendarView({
             {selectedDayReservations.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-6">Sin reservaciones — haz clic en "Nueva" para crear una</p>
             ) : (
-              selectedDayReservations.map((r) => (
+              selectedDayReservations.map((r) => {
+                const cIdx = communityIds.length > 1 ? communityIds.indexOf(r._communityId ?? '') : -1
+                const dotColor = cIdx >= 0 ? COMMUNITY_COLORS[cIdx % COMMUNITY_COLORS.length].bg : STATUS_DOT[r.status]
+                const badgeCls = cIdx >= 0 ? COMMUNITY_COLORS[cIdx % COMMUNITY_COLORS.length].badge : ''
+                return (
                 <div key={r.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${STATUS_DOT[r.status]}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${dotColor}`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{r.commonArea?.name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-medium text-gray-900">{r.commonArea?.name}</p>
+                      {cIdx >= 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${badgeCls}`}>
+                          {communityMap[r._communityId] ?? 'Comunidad'}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500">
                       {fullName(r.user)} · {formatDate(r.startTime, 'HH:mm')} – {formatDate(r.endTime, 'HH:mm')} · {r.attendees} asistentes
                     </p>
@@ -306,7 +340,8 @@ function CalendarView({
                     )}
                   </div>
                 </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>
@@ -425,6 +460,9 @@ export default function ReservationsPage() {
   const { data: areasData } = useAreas()
   const reservations = Array.isArray(data) ? data : []
   const areas = Array.isArray(areasData) ? areasData : []
+  const { activeCommunityId, activeCommunityIds, user } = useAuthStore()
+  const communityIds = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+  const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
 
   return (
     <div className="space-y-5">
@@ -472,6 +510,8 @@ export default function ReservationsPage() {
           update={update}
           areas={areas}
           create={create}
+          communityIds={communityIds}
+          communityMap={communityMap}
         />
       ) : (
         <TableView

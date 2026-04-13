@@ -17,6 +17,25 @@ const GATE_TTL_SECONDS = 30 // command expires after 30s if not picked up
 
 const gateRoutes: FastifyPluginAsync = async (fastify) => {
 
+  // ── Access event log (admin/manager) ─────────────────────
+  fastify.get<{ Params: { communityId: string }; Querystring: { limit?: string; offset?: string } }>(
+    '/:communityId/gate/events',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.COMMUNITY_ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN, UserRole.GUARD)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const limit  = Math.min(200, Math.max(1, parseInt(req.query.limit  ?? '50')))
+      const offset = Math.max(0, parseInt(req.query.offset ?? '0'))
+
+      const events = await fastify.prisma.accessEvent.findMany({
+        where: { communityId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      })
+      return reply.send({ events, total: events.length, limit, offset })
+    },
+  )
+
   // ── Resident triggers gate open (ENTRY) ───────────────────
   fastify.post<{ Params: { communityId: string } }>(
     '/:communityId/gate/open',

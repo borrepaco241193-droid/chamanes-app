@@ -44,6 +44,18 @@ const notificationRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Unread count ──────────────────────────────────────────
+  fastify.get(
+    '/unread-count',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      const count = await fastify.prisma.notification.count({
+        where: { userId: req.user.sub, isRead: false },
+      })
+      return reply.send({ data: { count } })
+    },
+  )
+
   // ── Mark all as read ───────────────────────────────────────
   fastify.patch(
     '/read-all',

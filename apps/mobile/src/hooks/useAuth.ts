@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as SecureStore from 'expo-secure-store'
 import { useAuthStore } from '../stores/auth.store'
 import { authService } from '../services/auth.service'
 
@@ -15,8 +15,8 @@ export function useLogin() {
   return useMutation({
     mutationFn: authService.login,
     onSuccess: async (data) => {
-      await AsyncStorage.setItem('access-token', data.accessToken)
-      await AsyncStorage.setItem('refresh-token', data.refreshToken)
+      await SecureStore.setItemAsync('access-token', data.accessToken)
+      await SecureStore.setItemAsync('refresh-token', data.refreshToken)
       // communityId may be absent for SUPER_ADMIN — fall back to first community
       const communityId = data.user.communityId ?? data.user.communities?.[0]?.id
       const communityRole = data.user.communityRole ?? (data.user.communities?.[0]?.role as any)
@@ -31,6 +31,7 @@ export function useLogin() {
           role: data.user.role,
           communityId,
           communityRole,
+          communities: data.user.communities,
         },
         {
           accessToken: data.accessToken,
@@ -59,8 +60,8 @@ export function useLogout() {
       }
     },
     onSettled: async () => {
-      await AsyncStorage.removeItem('access-token').catch(() => {})
-      await AsyncStorage.removeItem('refresh-token').catch(() => {})
+      await SecureStore.deleteItemAsync('access-token').catch(() => {})
+      await SecureStore.deleteItemAsync('refresh-token').catch(() => {})
       logout()
       queryClient.clear()
       router.replace('/(auth)/login')
@@ -91,12 +92,55 @@ export function useChangePassword() {
   })
 }
 
+export function useUpdateProfile() {
+  const { user, setUser } = useAuthStore()
+  return useMutation({
+    mutationFn: (data: { firstName?: string; lastName?: string; phone?: string }) =>
+      authService.updateProfile(data),
+    onSuccess: (updated) => {
+      if (user) setUser({ ...user, firstName: updated.firstName, lastName: updated.lastName })
+    },
+  })
+}
+
+export function useChangeEmail() {
+  const { user, setUser } = useAuthStore()
+  return useMutation({
+    mutationFn: ({ newEmail, currentPassword }: { newEmail: string; currentPassword: string }) =>
+      authService.changeEmail(newEmail, currentPassword),
+    onSuccess: (_data, variables) => {
+      if (user) setUser({ ...user, email: variables.newEmail })
+    },
+  })
+}
+
 export function useMe() {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user, setUser } = useAuthStore()
   return useQuery({
     queryKey: ['me'],
-    queryFn: authService.getMe,
+    queryFn: async () => {
+      const result = await authService.getMe()
+      // Sync fresh communities to the auth store so multi-community switcher works
+      const freshCommunities = (result as any).communities
+      if (user && Array.isArray(freshCommunities) && freshCommunities.length > 0) {
+        setUser({ ...user, communities: freshCommunities })
+      }
+      return result
+    },
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
+  })
+}
+
+export function useUploadAvatar() {
+  const { user, setUser } = useAuthStore()
+  return useMutation({
+    mutationFn: ({ imageUri, mimeType }: { imageUri: string; mimeType: string }) =>
+      authService.uploadAvatar(imageUri, mimeType),
+    onSuccess: (data) => {
+      if (user) {
+        setUser({ ...user, avatarUrl: data.avatarUrl })
+      }
+    },
   })
 }

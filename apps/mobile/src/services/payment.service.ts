@@ -50,6 +50,14 @@ export const paymentService = {
     return res.data
   },
 
+  async getPaymentIntent(
+    communityId: string,
+    paymentId: string,
+  ): Promise<{ clientSecret: string; paymentIntentId: string; publishableKey: string }> {
+    const res = await api.post(`/communities/${communityId}/payments/${paymentId}/payment-intent`)
+    return res.data
+  },
+
   async generateFees(
     communityId: string,
     data: { month: number; year: number; amount?: number },

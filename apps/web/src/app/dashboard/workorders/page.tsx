@@ -25,6 +25,9 @@ function useAssignWorkOrder() {
 function DetailModal({ wo, staff, onClose }: { wo: any; staff: any[]; onClose: () => void }) {
   const [photoModal, setPhotoModal] = useState<string | null>(null)
   const [assignId, setAssignId] = useState('')
+  const [localPriority, setLocalPriority] = useState<string>(wo.priority)
+  const [localStatus, setLocalStatus] = useState<string>(wo.status)
+  const [updatingPriority, setUpdatingPriority] = useState<string | null>(null)
   const assignWO = useAssignWorkOrder()
   const updateWO = useUpdateWorkOrder()
 
@@ -102,26 +105,41 @@ function DetailModal({ wo, staff, onClose }: { wo: any; staff: any[]; onClose: (
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Prioridad</p>
                 <div className="flex gap-1 flex-wrap">
                   {[
-                    { value: 'LOW',    label: 'Baja',    cls: 'bg-gray-100 text-gray-600 hover:bg-gray-200' },
-                    { value: 'MEDIUM', label: 'Media',   cls: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-                    { value: 'HIGH',   label: 'Alta',    cls: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-                    { value: 'URGENT', label: 'Urgente', cls: 'bg-red-100 text-red-700 hover:bg-red-200' },
-                  ].map((p) => (
-                    <button
-                      key={p.value}
-                      onClick={() => updateWO.mutate({ id: wo.id, communityId: wo.communityId, body: { priority: p.value } })}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold transition-colors ${p.cls} ${wo.priority === p.value ? 'ring-2 ring-offset-1 ring-current' : ''}`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                    { value: 'LOW',    label: 'Baja',    cls: 'bg-gray-100 text-gray-700', activeCls: 'bg-gray-600 text-white shadow-md scale-105' },
+                    { value: 'MEDIUM', label: 'Media',   cls: 'bg-amber-100 text-amber-700', activeCls: 'bg-amber-500 text-white shadow-md scale-105' },
+                    { value: 'HIGH',   label: 'Alta',    cls: 'bg-orange-100 text-orange-700', activeCls: 'bg-orange-500 text-white shadow-md scale-105' },
+                    { value: 'URGENT', label: '🚨 URG',  cls: 'bg-red-100 text-red-700', activeCls: 'bg-red-600 text-white shadow-md scale-105' },
+                  ].map((p) => {
+                    const isActive = localPriority === p.value
+                    const isUpdating = updatingPriority === p.value
+                    return (
+                      <button
+                        key={p.value}
+                        disabled={isUpdating}
+                        onClick={async () => {
+                          if (isActive) return
+                          setUpdatingPriority(p.value)
+                          setLocalPriority(p.value)
+                          await updateWO.mutateAsync({ id: wo.id, communityId: wo.communityId, body: { priority: p.value } })
+                          setUpdatingPriority(null)
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${isActive ? p.activeCls : p.cls + ' hover:opacity-80'} ${isUpdating ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        {isUpdating ? '...' : p.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Estado</p>
                 <select
-                  value={wo.status}
-                  onChange={(e) => updateWO.mutate({ id: wo.id, communityId: wo.communityId, body: { status: e.target.value } })}
+                  value={localStatus}
+                  onChange={async (e) => {
+                    const newStatus = e.target.value
+                    setLocalStatus(newStatus)
+                    await updateWO.mutateAsync({ id: wo.id, communityId: wo.communityId, body: { status: newStatus } })
+                  }}
                   className="input text-sm"
                 >
                   {['OPEN','ASSIGNED','IN_PROGRESS','COMPLETED','CANCELLED'].map((s) => (

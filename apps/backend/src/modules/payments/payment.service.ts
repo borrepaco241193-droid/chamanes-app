@@ -243,6 +243,82 @@ export async function createCheckoutSession(
   return { checkoutUrl: session.url, sessionId: session.id }
 }
 
+// ── Stripe Payment Intent (native Payment Sheet) ─────────────
+
+export async function createPaymentIntent(
+  prisma: PrismaClient,
+  communityId: string,
+  paymentId: string,
+  userId: string,
+  isAdmin: boolean,
+) {
+  const payment = await getPayment(prisma, communityId, paymentId, userId, isAdmin)
+
+  if (payment.status === PaymentStatus.COMPLETED) {
+    const err = new Error('Este pago ya fue completado') as any
+    err.statusCode = 400
+    throw err
+  }
+
+  if (payment.status === PaymentStatus.REFUNDED) {
+    const err = new Error('Este pago fue reembolsado') as any
+    err.statusCode = 400
+    throw err
+  }
+
+  // Re-use existing intent if already PROCESSING (user navigated away and came back)
+  if (payment.status === PaymentStatus.PROCESSING && payment.stripePaymentIntentId) {
+    try {
+      const existing = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId)
+      if (existing.status === 'requires_payment_method' || existing.status === 'requires_confirmation') {
+        return { clientSecret: existing.client_secret!, paymentIntentId: existing.id }
+      }
+    } catch {
+      // Fall through to create a new one
+    }
+  }
+
+  // Calculate late fee if past due
+  let totalAmount = Number(payment.amount)
+  let lateFeeAmount = 0
+  const community = await prisma.community.findUnique({ where: { id: communityId } })
+  const settings = community?.settings as any
+
+  if (payment.dueDate && payment.dueDate < new Date() && !payment.lateFeeApplied) {
+    const lateFeePct = settings?.lateFeePct ?? 0
+    if (lateFeePct > 0) {
+      lateFeeAmount = Math.round(totalAmount * (lateFeePct / 100) * 100) / 100
+      totalAmount += lateFeeAmount
+    }
+  }
+
+  const amountInCents = Math.round(totalAmount * 100)
+
+  const intent = await stripe.paymentIntents.create({
+    amount: amountInCents,
+    currency: (payment.currency ?? 'MXN').toLowerCase(),
+    receipt_email: payment.user.email,
+    automatic_payment_methods: { enabled: true },
+    metadata: {
+      paymentId: payment.id,
+      communityId,
+      userId: payment.userId,
+      lateFeeAmount: String(lateFeeAmount),
+    },
+  })
+
+  await prisma.payment.update({
+    where: { id: payment.id },
+    data: {
+      status: PaymentStatus.PROCESSING,
+      stripePaymentIntentId: intent.id,
+      ...(lateFeeAmount > 0 ? { lateFeeApplied: true, lateFeeAmount } : {}),
+    },
+  })
+
+  return { clientSecret: intent.client_secret!, paymentIntentId: intent.id }
+}
+
 // ── Stripe Webhook ────────────────────────────────────────────
 
 export async function handleStripeWebhook(
@@ -286,6 +362,42 @@ export async function handleStripeWebhook(
 
       if (paymentId) {
         // Revert to PENDING so they can try again
+        await prisma.payment.update({
+          where: { id: paymentId },
+          data: { status: PaymentStatus.PENDING, stripePaymentIntentId: null },
+        })
+      }
+      break
+    }
+
+    // ── Payment Sheet (native) events ──────────────────────────
+    case 'payment_intent.succeeded': {
+      const intent = event.data.object
+      const { paymentId } = intent.metadata ?? {}
+
+      if (paymentId) {
+        const charges = await stripe.charges.list({ payment_intent: intent.id, limit: 1 })
+        const receiptUrl = charges.data[0]?.receipt_url ?? null
+
+        await prisma.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: PaymentStatus.COMPLETED,
+            paidAt: new Date(),
+            stripePaymentIntentId: intent.id,
+            stripeReceiptUrl: receiptUrl,
+          },
+        })
+      }
+      break
+    }
+
+    case 'payment_intent.payment_failed': {
+      const intent = event.data.object
+      const { paymentId } = intent.metadata ?? {}
+
+      if (paymentId) {
+        // Revert to PENDING so resident can retry
         await prisma.payment.update({
           where: { id: paymentId },
           data: { status: PaymentStatus.PENDING, stripePaymentIntentId: null },

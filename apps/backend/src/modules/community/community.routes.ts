@@ -97,12 +97,25 @@ const communityRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Update community (SUPER_ADMIN | COMMUNITY_ADMIN | MANAGER) ─
+  // ── Update community (SUPER_ADMIN only can edit any; ADMIN/MANAGER only their own) ─
   fastify.patch<{ Params: { communityId: string }; Body: unknown }>(
     '/:communityId',
     { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
     async (req, reply) => {
       const { communityId } = req.params
+      const isSuperAdmin = req.user.role === 'SUPER_ADMIN'
+
+      // Non-SUPER_ADMIN admins can only update their own community
+      if (!isSuperAdmin) {
+        const membership = await fastify.prisma.communityUser.findUnique({
+          where: { userId_communityId: { userId: req.user.sub, communityId } },
+          select: { role: true, isActive: true },
+        })
+        if (!membership || !membership.isActive) {
+          return reply.code(403).send({ error: 'Forbidden', message: 'No tienes acceso a esta comunidad' })
+        }
+      }
+
       const body = updateCommunitySchema.parse(req.body)
 
       const community = await fastify.prisma.community.findUnique({ where: { id: communityId } })

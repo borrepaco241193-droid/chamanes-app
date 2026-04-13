@@ -47,6 +47,16 @@ export function usePendingIdVerifications() {
   })
 }
 
+export function useIdVerifications(status: 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' = 'ALL') {
+  const communityId = useCommunityId()
+  return useQuery({
+    queryKey: ['id-verifications', communityId, status],
+    queryFn: () => adminService.getIdVerifications(communityId, status),
+    enabled: !!communityId,
+    staleTime: 30_000,
+  })
+}
+
 export function useArrears() {
   const communityId = useCommunityId()
   return useQuery({
@@ -71,10 +81,11 @@ export function useVerifyId() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ userId, approve }: { userId: string; approve: boolean }) =>
-      adminService.verifyId(communityId, userId, approve),
+    mutationFn: ({ userId, approve, note }: { userId: string; approve: boolean; note?: string }) =>
+      adminService.verifyId(communityId, userId, approve, note),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['id-pending', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['id-verifications', communityId] })
     },
   })
 }

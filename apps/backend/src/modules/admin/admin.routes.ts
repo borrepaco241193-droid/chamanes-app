@@ -1,6 +1,8 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
+import { z } from 'zod'
 import { getDashboardStats, getPaymentReport, getAccessReport } from './admin.service.js'
+import { sendPushNotification } from '../notifications/notification.service.js'
 
 // ── CSV helper ────────────────────────────────────────────────
 function toCSV(rows: Record<string, unknown>[]): string {
@@ -140,10 +142,12 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return { start, end }
   }
 
+  const CSV_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }
+
   // GET /communities/:id/admin/csv/access — gate access log
   fastify.get<CsvParams>(
     '/:communityId/admin/csv/access',
-    { preHandler: adminOnly },
+    { preHandler: adminOnly, ...CSV_RATE_LIMIT },
     async (req, reply) => {
       const { communityId } = req.params
       const { start, end } = dateRange(req.query.from, req.query.to)
@@ -177,7 +181,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /communities/:id/admin/csv/payments — payments log
   fastify.get<CsvParams>(
     '/:communityId/admin/csv/payments',
-    { preHandler: adminOnly },
+    { preHandler: adminOnly, ...CSV_RATE_LIMIT },
     async (req, reply) => {
       const { communityId } = req.params
       const { start, end } = dateRange(req.query.from, req.query.to)
@@ -215,7 +219,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /communities/:id/admin/csv/reservations — reservations log
   fastify.get<CsvParams>(
     '/:communityId/admin/csv/reservations',
-    { preHandler: adminOnly },
+    { preHandler: adminOnly, ...CSV_RATE_LIMIT },
     async (req, reply) => {
       const { communityId } = req.params
       const { start, end } = dateRange(req.query.from, req.query.to)
@@ -250,7 +254,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /communities/:id/admin/csv/visitors — visitor passes log
   fastify.get<CsvParams>(
     '/:communityId/admin/csv/visitors',
-    { preHandler: adminOnly },
+    { preHandler: adminOnly, ...CSV_RATE_LIMIT },
     async (req, reply) => {
       const { communityId } = req.params
       const { start, end } = dateRange(req.query.from, req.query.to)
@@ -289,7 +293,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /communities/:id/admin/csv/summary — full summary report
   fastify.get<CsvParams>(
     '/:communityId/admin/csv/summary',
-    { preHandler: adminOnly },
+    { preHandler: adminOnly, ...CSV_RATE_LIMIT },
     async (req, reply) => {
       const { communityId } = req.params
       const { start, end } = dateRange(req.query.from, req.query.to)
@@ -382,35 +386,104 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── IDENTITY VERIFICATION (admin approves) ────────────────
 
-  // GET /communities/:id/admin/id-pending — users with idPhotoUrl but not idVerified
+  // GET /communities/:id/admin/id-pending — legacy compat: only pending
   fastify.get<{ Params: { communityId: string } }>(
     '/:communityId/admin/id-pending',
     { preHandler: adminOnly },
     async (req, reply) => {
       const { communityId } = req.params
       const members = await fastify.prisma.communityUser.findMany({
-        where: { communityId, isActive: true, user: { idPhotoUrl: { not: null }, idVerified: false } },
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, idPhotoUrl: true } } },
+        where: { communityId, isActive: true, user: { idVerificationStatus: 'PENDING' } },
+        include: { user: { select: { id: true, firstName: true, lastName: true, email: true, idPhotoUrl: true, idVerificationStatus: true } } },
       })
       return reply.send({ pending: members.map((m) => m.user) })
     },
   )
 
-  // PATCH /communities/:id/admin/id-verify/:userId — approve or reject ID
-  fastify.patch<{ Params: { communityId: string; userId: string }; Body: { approve: boolean } }>(
+  // GET /communities/:id/admin/id-verifications?status=PENDING|APPROVED|REJECTED|ALL
+  fastify.get<{ Params: { communityId: string }; Querystring: { status?: string } }>(
+    '/:communityId/admin/id-verifications',
+    { preHandler: adminOnly },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const status = req.query.status ?? 'ALL'
+
+      // Build filter — exclude NOT_SUBMITTED unless explicitly requested
+      const statusFilter = status === 'ALL'
+        ? { not: 'NOT_SUBMITTED' }
+        : status
+
+      const members = await fastify.prisma.communityUser.findMany({
+        where: {
+          communityId,
+          isActive: true,
+          user: { idVerificationStatus: statusFilter as any },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              idPhotoUrl: true,
+              idVerified: true,
+              idVerificationStatus: true,
+              idVerificationNote: true,
+              updatedAt: true,
+            },
+          },
+        },
+        orderBy: { user: { updatedAt: 'desc' } },
+      })
+
+      return reply.send({ verifications: members.map((m) => m.user) })
+    },
+  )
+
+  const idVerifySchema = z.object({
+    approve: z.boolean(),
+    note: z.string().max(500).optional(),
+  })
+
+  // PATCH /communities/:id/admin/id-verify/:userId — approve or reject ID + notify user
+  fastify.patch<{
+    Params: { communityId: string; userId: string }
+    Body: unknown
+  }>(
     '/:communityId/admin/id-verify/:userId',
     { preHandler: adminOnly },
     async (req, reply) => {
-      const { userId } = req.params
-      const { approve } = req.body as { approve: boolean }
+      const { userId, communityId } = req.params
+      const { approve, note } = idVerifySchema.parse(req.body)
+
+      const newStatus = approve ? 'APPROVED' : 'REJECTED'
+
       await fastify.prisma.user.update({
         where: { id: userId },
         data: {
           idVerified: approve,
-          ...(approve ? {} : { idPhotoUrl: null }), // reject = clear photo so they can re-upload
+          idVerificationStatus: newStatus,
+          idVerificationNote: note ?? null,
+          // On reject: keep the photo so admin can still see it in history
+          // User must re-upload to get back to PENDING
         },
       })
-      return reply.send({ ok: true })
+
+      // Push notification to the resident
+      sendPushNotification(fastify.prisma, {
+        userIds: [userId],
+        title: approve ? '✅ Identidad verificada' : '❌ Verificación rechazada',
+        body: approve
+          ? 'Tu identidad fue verificada correctamente. Ya tienes acceso completo.'
+          : note
+            ? `Tu verificación fue rechazada: ${note}. Sube una nueva foto para reintentar.`
+            : 'Tu verificación fue rechazada. Sube una nueva foto para reintentar.',
+        type: 'id_verification',
+        data: { status: newStatus, communityId },
+      }).catch(() => {})
+
+      return reply.send({ ok: true, status: newStatus })
     },
   )
 }

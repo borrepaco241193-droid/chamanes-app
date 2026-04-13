@@ -30,17 +30,33 @@ export function useDashboardStats() {
       )
       const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
       if (results.length === 0) return {}
-      // Aggregate numeric stats
-      return results.reduce((acc, s) => ({
-        totalResidents:    (acc.totalResidents    ?? 0) + (s.totalResidents    ?? 0),
-        totalUnits:        (acc.totalUnits        ?? 0) + (s.totalUnits        ?? 0),
-        pendingPayments:   (acc.pendingPayments   ?? 0) + (s.pendingPayments   ?? 0),
-        pendingAmount:     (acc.pendingAmount     ?? 0) + (s.pendingAmount     ?? 0),
-        monthRevenue:      (acc.monthRevenue      ?? 0) + (s.monthRevenue      ?? 0),
-        openWorkOrders:    (acc.openWorkOrders    ?? 0) + (s.openWorkOrders    ?? 0),
-        urgentWorkOrders:  (acc.urgentWorkOrders  ?? 0) + (s.urgentWorkOrders  ?? 0),
-        upcomingReservations: (acc.upcomingReservations ?? 0) + (s.upcomingReservations ?? 0),
-        todayAccess:       (acc.todayAccess       ?? 0) + (s.todayAccess       ?? 0),
+      // Aggregate — match exact nested structure the backend returns
+      return results.reduce((acc: any, s: any) => ({
+        residents: (acc.residents ?? 0) + (s.residents ?? 0),
+        units: {
+          total:    (acc.units?.total    ?? 0) + (s.units?.total    ?? 0),
+          occupied: (acc.units?.occupied ?? 0) + (s.units?.occupied ?? 0),
+          vacant:   (acc.units?.vacant   ?? 0) + (s.units?.vacant   ?? 0),
+        },
+        payments: {
+          pending:             (acc.payments?.pending             ?? 0) + (s.payments?.pending             ?? 0),
+          collectedThisMonth:  (acc.payments?.collectedThisMonth  ?? 0) + (s.payments?.collectedThisMonth  ?? 0),
+          pendingAmount:       (acc.payments?.pendingAmount       ?? 0) + (s.payments?.pendingAmount       ?? 0),
+        },
+        visitors: {
+          activePasses: (acc.visitors?.activePasses ?? 0) + (s.visitors?.activePasses ?? 0),
+          todayEvents:  (acc.visitors?.todayEvents  ?? 0) + (s.visitors?.todayEvents  ?? 0),
+        },
+        workOrders: {
+          open:   (acc.workOrders?.open   ?? 0) + (s.workOrders?.open   ?? 0),
+          urgent: (acc.workOrders?.urgent ?? 0) + (s.workOrders?.urgent ?? 0),
+        },
+        reservations: {
+          pending: (acc.reservations?.pending ?? 0) + (s.reservations?.pending ?? 0),
+        },
+        staff: {
+          total: (acc.staff?.total ?? 0) + (s.staff?.total ?? 0),
+        },
       }), {})
     },
     enabled: ids.length > 0,

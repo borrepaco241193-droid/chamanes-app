@@ -51,6 +51,13 @@ export function useHasPendingPayments() {
   return { hasPending, isLoading }
 }
 
+export function usePaymentIntent() {
+  const communityId = useCommunityId()
+  return useMutation({
+    mutationFn: (paymentId: string) => paymentService.getPaymentIntent(communityId, paymentId),
+  })
+}
+
 export function useGenerateFees() {
   const communityId = useCommunityId()
   const queryClient = useQueryClient()

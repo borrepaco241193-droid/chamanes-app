@@ -15,12 +15,17 @@ import { sendEmail, newReservationEmail, reservationApprovedEmail, reservationCh
 // Reservation Routes
 //
 // GET    /communities/:id/common-areas                     — list areas
+// POST   /communities/:id/common-areas                     — admin: create area
+// PATCH  /communities/:id/common-areas/:areaId             — admin: update area
+// DELETE /communities/:id/common-areas/:areaId             — admin: delete area
 // GET    /communities/:id/common-areas/:areaId/slots       — available slots
 // POST   /communities/:id/reservations                     — create
 // GET    /communities/:id/reservations                     — list mine (admin: all)
 // DELETE /communities/:id/reservations/:reservationId      — cancel
 // PATCH  /communities/:id/reservations/:reservationId/approve — admin approve
 // ============================================================
+
+const ADMIN_ROLES = [UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER]
 
 const reservationRoutes: FastifyPluginAsync = async (fastify) => {
   // ── List common areas ─────────────────────────────────────
@@ -30,6 +35,67 @@ const reservationRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const areas = await listCommonAreas(fastify.prisma, req.params.communityId)
       return reply.send(areas)
+    },
+  )
+
+  // ── Admin: create common area ─────────────────────────────
+  fastify.post<{ Params: { communityId: string }; Body: unknown }>(
+    '/:communityId/common-areas',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const body = req.body as any
+      const area = await fastify.prisma.commonArea.create({
+        data: {
+          communityId: req.params.communityId,
+          name: String(body.name),
+          description: body.description ? String(body.description) : null,
+          capacity: body.capacity ? Number(body.capacity) : null,
+          openTime: body.openTime ? String(body.openTime) : null,
+          closeTime: body.closeTime ? String(body.closeTime) : null,
+          requiresApproval: Boolean(body.requiresApproval ?? false),
+          feeAmount: body.feeAmount ? Number(body.feeAmount) : 0,
+          isActive: true,
+        },
+      })
+      return reply.code(201).send(area)
+    },
+  )
+
+  // ── Admin: update common area ─────────────────────────────
+  fastify.patch<{ Params: { communityId: string; areaId: string }; Body: unknown }>(
+    '/:communityId/common-areas/:areaId',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const body = req.body as any
+      const area = await fastify.prisma.commonArea.updateMany({
+        where: { id: req.params.areaId, communityId: req.params.communityId },
+        data: {
+          ...(body.name !== undefined       ? { name: String(body.name) }               : {}),
+          ...(body.description !== undefined ? { description: body.description }         : {}),
+          ...(body.capacity !== undefined   ? { capacity: Number(body.capacity) }        : {}),
+          ...(body.openTime !== undefined   ? { openTime: String(body.openTime) }        : {}),
+          ...(body.closeTime !== undefined  ? { closeTime: String(body.closeTime) }      : {}),
+          ...(body.requiresApproval !== undefined ? { requiresApproval: Boolean(body.requiresApproval) } : {}),
+          ...(body.feeAmount !== undefined  ? { feeAmount: Number(body.feeAmount) }      : {}),
+          ...(body.isActive !== undefined   ? { isActive: Boolean(body.isActive) }       : {}),
+        },
+      })
+      if (area.count === 0) return reply.code(404).send({ error: 'Area not found' })
+      const updated = await fastify.prisma.commonArea.findUnique({ where: { id: req.params.areaId } })
+      return reply.send(updated)
+    },
+  )
+
+  // ── Admin: delete common area ─────────────────────────────
+  fastify.delete<{ Params: { communityId: string; areaId: string } }>(
+    '/:communityId/common-areas/:areaId',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      await fastify.prisma.commonArea.updateMany({
+        where: { id: req.params.areaId, communityId: req.params.communityId },
+        data: { isActive: false },
+      })
+      return reply.send({ ok: true })
     },
   )
 

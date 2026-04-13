@@ -16,6 +16,13 @@ export async function createWorkOrder(
   reportedById: string,
   input: CreateWorkOrderInput,
 ) {
+  const community = await prisma.community.findUnique({ where: { id: communityId }, select: { id: true } })
+  if (!community) {
+    const err = new Error('Comunidad no encontrada. Cierra sesión e inicia de nuevo.') as any
+    err.statusCode = 404
+    throw err
+  }
+
   return prisma.workOrder.create({
     data: {
       communityId,

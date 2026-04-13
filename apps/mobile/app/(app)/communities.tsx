@@ -70,7 +70,11 @@ function NewCommunityModal({ visible, onClose, onCreated }: {
       setForm({ name: '', address: '', city: '', state: '', country: 'MX', zipCode: '', phone: '', email: '', timezone: 'America/Mexico_City', currency: 'MXN' })
       onCreated(community)
       onClose()
-      Alert.alert('Listo', `Comunidad "${community.name}" creada correctamente`)
+      // Launch guided onboarding for the new community
+      router.push({
+        pathname: '/(app)/onboarding',
+        params: { communityId: community.id, communityName: encodeURIComponent(community.name) },
+      } as any)
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message ?? 'No se pudo crear la comunidad')
     }
@@ -321,6 +325,8 @@ export default function CommunitiesScreen() {
   const user = useAuthStore((s) => s.user)
   const setCommunity = useAuthStore((s) => s.setCommunity)
   const isSuperAdmin = user?.role === 'SUPER_ADMIN'
+  const hasMultipleCommunities = (user?.communities?.length ?? 0) > 1
+  const canAccessCommunities = isSuperAdmin || hasMultipleCommunities
   // True when arriving here because no community is selected yet (first access)
   const isFirstSelect = isSuperAdmin && !user?.communityId
 
@@ -328,14 +334,22 @@ export default function CommunitiesScreen() {
   const [managingCommunity, setManagingCommunity] = useState<Community | null>(null)
 
   const { data, isLoading, isRefetching, refetch } = useCommunities()
-  const communities = data?.communities ?? []
+  // SUPER_ADMIN fetches all communities from API; others use their own list from login
+  const communities: Community[] = isSuperAdmin
+    ? (data?.communities ?? [])
+    : (user?.communities?.map((c) => ({
+        id: c.id, name: c.name, city: '', state: '', country: '', address: '',
+        phone: null, email: null, logoUrl: c.logoUrl ?? null, timezone: '',
+        currency: '', totalUnits: 0, isActive: true,
+        settings: {} as any,
+      })) ?? [])
 
-  if (!isSuperAdmin) {
+  if (!canAccessCommunities) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <Ionicons name="lock-closed-outline" size={48} color="#334155" />
         <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 16 }}>Acceso restringido</Text>
-        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>Solo los superadministradores pueden gestionar comunidades.</Text>
+        <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 8 }}>No tienes múltiples comunidades asignadas.</Text>
       </SafeAreaView>
     )
   }
@@ -376,11 +390,13 @@ export default function CommunitiesScreen() {
           <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold' }}>Comunidades</Text>
           <Text style={{ color: '#64748B', fontSize: 12 }}>{communities.length} registradas</Text>
         </View>
-        <TouchableOpacity onPress={() => setShowNew(true)}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#3B82F6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
-          <Ionicons name="add" size={18} color="white" />
-          <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Nueva</Text>
-        </TouchableOpacity>
+        {isSuperAdmin && (
+          <TouchableOpacity onPress={() => setShowNew(true)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#3B82F6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Ionicons name="add" size={18} color="white" />
+            <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Nueva</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Info banner */}

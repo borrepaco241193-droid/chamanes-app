@@ -6,6 +6,7 @@ import {
   getPayment,
   generateMonthlyFees,
   createCheckoutSession,
+  createPaymentIntent,
   handleStripeWebhook,
 } from './payment.service.js'
 import { env } from '../../config/env.js'
@@ -94,7 +95,7 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  // ── Create Stripe Checkout Session ────────────────────────
+  // ── Create Stripe Checkout Session (fallback/web) ────────
   fastify.post<{ Params: { communityId: string; paymentId: string }; Body: unknown }>(
     '/:communityId/payments/:paymentId/checkout',
     { preHandler: [fastify.authenticate] },
@@ -111,7 +112,6 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         req.user.communityRole ?? req.user.role,
       )
 
-      // Deep link back into the app after payment
       const apiUrl = env.API_URL
       const successUrl =
         body.successUrl ?? `${apiUrl}/payment-success?paymentId=${req.params.paymentId}`
@@ -127,6 +127,37 @@ const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         cancelUrl,
       )
       return reply.send(result)
+    },
+  )
+
+  // ── Create Payment Intent (native Payment Sheet) ──────────
+  fastify.post<{ Params: { communityId: string; paymentId: string } }>(
+    '/:communityId/payments/:paymentId/payment-intent',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      if (!env.STRIPE_SECRET_KEY) {
+        return reply.code(503).send({
+          error: 'ServiceUnavailable',
+          message: 'El procesamiento de pagos no está configurado aún.',
+        })
+      }
+
+      const isAdmin = ([UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER] as string[]).includes(
+        req.user.communityRole ?? req.user.role,
+      )
+
+      const result = await createPaymentIntent(
+        fastify.prisma,
+        req.params.communityId,
+        req.params.paymentId,
+        req.user.sub,
+        isAdmin,
+      )
+
+      return reply.send({
+        ...result,
+        publishableKey: env.STRIPE_PUBLISHABLE_KEY,
+      })
     },
   )
 }

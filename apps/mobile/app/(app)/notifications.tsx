@@ -20,7 +20,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }
   visitor_arrived:       { icon: 'person-add',       color: '#22C55E', label: 'Visita' },
   payment_due:           { icon: 'card',             color: '#F59E0B', label: 'Pago' },
   payment_confirmed:     { icon: 'checkmark-circle', color: '#10B981', label: 'Pago confirmado' },
-  reservation_confirmed: { icon: 'calendar-check',  color: '#3B82F6', label: 'Reservación' },
+  reservation_confirmed: { icon: 'calendar',         color: '#3B82F6', label: 'Reservación' },
   reservation_charge:    { icon: 'alert-circle',     color: '#F97316', label: 'Cargo de reservación' },
   work_order:            { icon: 'construct',        color: '#8B5CF6', label: 'Tarea' },
   announcement:          { icon: 'megaphone',        color: '#F97316', label: 'Anuncio' },

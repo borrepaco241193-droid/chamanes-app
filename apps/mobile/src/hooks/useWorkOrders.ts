@@ -56,6 +56,19 @@ export function useUpdateWorkOrderStatus() {
   })
 }
 
+export function useUpdateWorkOrder() {
+  const communityId = useCommunityId()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orderId, data }: { orderId: string; data: { priority?: string; status?: string; title?: string; location?: string } }) =>
+      workOrderService.update(communityId, orderId, data),
+    onSuccess: (_, { orderId }) => {
+      queryClient.invalidateQueries({ queryKey: ['work-orders', communityId] })
+      queryClient.invalidateQueries({ queryKey: ['work-order', communityId, orderId] })
+    },
+  })
+}
+
 export function useStaffList() {
   const communityId = useCommunityId()
   return useQuery({

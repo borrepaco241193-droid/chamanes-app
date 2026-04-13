@@ -1,5 +1,17 @@
 import api from '../lib/api'
 
+export interface IdVerification {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  idPhotoUrl: string | null
+  idVerified: boolean
+  idVerificationStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
+  idVerificationNote: string | null
+  updatedAt: string
+}
+
 export interface DashboardStats {
   units: { total: number; occupied: number; vacant: number }
   residents: number
@@ -47,11 +59,16 @@ export const adminService = {
 
   async getPendingIdVerifications(communityId: string) {
     const res = await api.get(`/communities/${communityId}/admin/id-pending`)
-    return res.data as { pending: { id: string; firstName: string; lastName: string; email: string; idPhotoUrl: string }[] }
+    return res.data as { pending: IdVerification[] }
   },
 
-  async verifyId(communityId: string, userId: string, approve: boolean) {
-    const res = await api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve })
+  async getIdVerifications(communityId: string, status: 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' = 'ALL') {
+    const res = await api.get(`/communities/${communityId}/admin/id-verifications`, { params: { status } })
+    return res.data as { verifications: IdVerification[] }
+  },
+
+  async verifyId(communityId: string, userId: string, approve: boolean, note?: string) {
+    const res = await api.patch(`/communities/${communityId}/admin/id-verify/${userId}`, { approve, note })
     return res.data
   },
 

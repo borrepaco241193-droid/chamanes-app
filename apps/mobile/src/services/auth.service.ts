@@ -60,4 +60,23 @@ export const authService = {
   changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
     await api.post('/auth/change-password', { currentPassword, newPassword })
   },
+
+  updateProfile: async (data: { firstName?: string; lastName?: string; phone?: string }): Promise<{ firstName: string; lastName: string }> => {
+    const res = await api.patch('/auth/me', data)
+    return res.data.user
+  },
+
+  changeEmail: async (newEmail: string, currentPassword: string): Promise<void> => {
+    await api.post('/auth/change-email', { newEmail, currentPassword })
+  },
+
+  uploadAvatar: async (imageUri: string, mimeType: string): Promise<{ avatarUrl: string }> => {
+    const formData = new FormData()
+    const ext = imageUri.split('.').pop()?.toLowerCase() ?? 'jpg'
+    formData.append('file', { uri: imageUri, type: mimeType, name: `avatar-${Date.now()}.${ext}` } as any)
+    const res = await api.post('/auth/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+  },
 }

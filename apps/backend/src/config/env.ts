@@ -28,8 +28,9 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 
-  // Stripe (optional until Phase 4)
+  // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
   // Resend (optional until Phase 2)
@@ -53,6 +54,7 @@ const envSchema = z.object({
 
   // Security
   ENCRYPTION_KEY: z.string().min(32).optional(),
+  ALLOWED_ORIGINS: z.string().optional(), // Comma-separated list of allowed CORS origins
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_TIME_WINDOW: z.coerce.number().default(60000),
 })
