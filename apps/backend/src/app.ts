@@ -60,10 +60,12 @@ export async function buildApp() {
   const ALLOWED_ORIGINS: (string | RegExp)[] = env.ALLOWED_ORIGINS
     ? env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
     : []
-  // In development allow localhost on any port
-  if (env.NODE_ENV === 'development') {
-    ALLOWED_ORIGINS.push(/^http:\/\/localhost(:\d+)?$/, /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/)
-  }
+  // Always allow localhost (any port) and local network IPs — needed for local web/mobile dev
+  ALLOWED_ORIGINS.push(
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+    /^http:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/,
+  )
 
   await app.register(cors, {
     origin: (origin, cb) => {
