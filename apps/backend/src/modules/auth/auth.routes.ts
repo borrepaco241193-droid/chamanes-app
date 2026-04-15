@@ -337,6 +337,22 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
+  // ── Admin: force-reset any user's password (SUPER_ADMIN only) ────────────
+  fastify.post('/admin-set-password', { preHandler: [fastify.authenticate] }, async (req, reply) => {
+    if (req.user.role !== 'SUPER_ADMIN') {
+      return reply.code(403).send({ error: 'Forbidden', message: 'Solo Super Admin puede usar este endpoint.' })
+    }
+    const { email, newPassword } = req.body as { email: string; newPassword: string }
+    if (!email || !newPassword || newPassword.length < 6) {
+      return reply.code(400).send({ error: 'Bad Request', message: 'email y newPassword (min 6 chars) requeridos.' })
+    }
+    const user = await fastify.prisma.user.findUnique({ where: { email } })
+    if (!user) return reply.code(404).send({ error: 'Not Found', message: 'Usuario no encontrado.' })
+    const bcrypt = await import('bcryptjs')
+    const hashed = await bcrypt.default.hash(newPassword, 10)
+    await fastify.prisma.user.update({ where: { email }, data: { password: hashed } })
+    return reply.send({ ok: true, message: `Contraseña actualizada para ${email}` })
+  })
 
 }
 
