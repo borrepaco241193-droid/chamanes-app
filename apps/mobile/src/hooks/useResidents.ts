@@ -22,8 +22,10 @@ export function useUnits(withStats = false) {
       if (ids.length <= 1) return residentService.listUnits(ids[0] ?? '', withStats)
       const results = await Promise.allSettled(ids.map((id) => residentService.listUnits(id, withStats)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const allUnits = fulfilled.flatMap((r) => r.units ?? [])
+      const seen = new Set<string>()
       return {
-        units: fulfilled.flatMap((r) => r.units ?? []),
+        units: allUnits.filter((u) => { if (seen.has(u.id)) return false; seen.add(u.id); return true }),
         stats: fulfilled.reduce((acc, r) => r.stats ? {
           total: (acc.total ?? 0) + (r.stats.total ?? 0),
           occupied: (acc.occupied ?? 0) + (r.stats.occupied ?? 0),
@@ -90,7 +92,7 @@ export function useUploadTransferProof() {
   return useMutation({
     mutationFn: ({ paymentId, imageUri, mimeType }: { paymentId: string; imageUri: string; mimeType: string }) =>
       residentService.uploadTransferProof(communityId, paymentId, imageUri, mimeType),
-    onSuccess: (_, { paymentId }) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', communityId] })
       queryClient.invalidateQueries({ queryKey: ['resident', communityId] })
     },
@@ -105,7 +107,9 @@ export function useResidents(params?: { search?: string; block?: string }) {
       if (ids.length <= 1) return residentService.list(ids[0] ?? '', params)
       const results = await Promise.allSettled(ids.map((id) => residentService.list(id, params)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.residents ?? [])
+      const all = fulfilled.flatMap((r) => r.residents ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true })
       return { residents: merged, total: merged.length, page: 1, pages: 1 }
     },
     enabled: ids.length > 0,

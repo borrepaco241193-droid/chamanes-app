@@ -31,7 +31,9 @@ export function useStaffList() {
       if (ids.length <= 1) return staffService.listStaff(ids[0] ?? '')
       const results = await Promise.allSettled(ids.map((id) => staffService.listStaff(id)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.staff ?? r.data ?? [])
+      const all = fulfilled.flatMap((r) => r.staff ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       return { staff: merged, total: merged.length }
     },
     enabled: ids.length > 0,

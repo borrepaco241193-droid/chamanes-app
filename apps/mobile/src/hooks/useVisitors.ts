@@ -12,7 +12,10 @@ export function useVisitorPasses(status?: string) {
       if (ids.length <= 1) return visitorService.listPasses(ids[0] ?? '', { status: status as any })
       const results = await Promise.allSettled(ids.map((id) => visitorService.listPasses(id, { status: status as any })))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.passes ?? r.data ?? []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      const all = fulfilled.flatMap((r) => r.passes ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return true })
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       return { passes: merged, total: merged.length }
     },
     enabled: ids.length > 0,
@@ -37,7 +40,10 @@ export function useAccessEvents() {
       if (ids.length <= 1) return visitorService.listAccessEvents(ids[0] ?? '')
       const results = await Promise.allSettled(ids.map((id) => visitorService.listAccessEvents(id)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.events ?? r.data ?? []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      const all = fulfilled.flatMap((r) => r.events ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((e) => { if (seen.has(e.id)) return false; seen.add(e.id); return true })
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       return { events: merged, total: merged.length }
     },
     enabled: ids.length > 0,

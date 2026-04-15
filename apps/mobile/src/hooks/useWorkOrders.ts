@@ -11,7 +11,10 @@ export function useWorkOrders(status?: WorkOrderStatus) {
       if (ids.length <= 1) return workOrderService.list(ids[0] ?? '', { status })
       const results = await Promise.allSettled(ids.map((id) => workOrderService.list(id, { status })))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.workOrders ?? r.data ?? []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      const all = fulfilled.flatMap((r) => r.workOrders ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((o) => { if (seen.has(o.id)) return false; seen.add(o.id); return true })
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       return { workOrders: merged, total: merged.length }
     },
     enabled: ids.length > 0,
@@ -79,7 +82,9 @@ export function useStaffList() {
       if (ids.length <= 1) return staffService.listStaff(ids[0] ?? '')
       const results = await Promise.allSettled(ids.map((id) => staffService.listStaff(id)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.staff ?? r.data ?? [])
+      const all = fulfilled.flatMap((r) => r.staff ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       return { staff: merged, total: merged.length }
     },
     enabled: ids.length > 0,

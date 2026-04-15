@@ -10,7 +10,9 @@ export function useCommonAreas() {
       if (ids.length <= 1) return reservationService.listAreas(ids[0] ?? '')
       const results = await Promise.allSettled(ids.map((id) => reservationService.listAreas(id)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.areas ?? r.data ?? [])
+      const all = fulfilled.flatMap((r) => r.areas ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((a) => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
       return { areas: merged, total: merged.length }
     },
     enabled: ids.length > 0,
@@ -36,7 +38,10 @@ export function useReservations(params?: { upcoming?: boolean; status?: string; 
       if (ids.length <= 1) return reservationService.list(ids[0] ?? '', params)
       const results = await Promise.allSettled(ids.map((id) => reservationService.list(id, params)))
       const fulfilled = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = fulfilled.flatMap((r) => r.reservations ?? r.data ?? []).sort((a: any, b: any) => new Date(b.startTime ?? b.createdAt).getTime() - new Date(a.startTime ?? a.createdAt).getTime())
+      const all = fulfilled.flatMap((r) => r.reservations ?? r.data ?? [])
+      const seen = new Set<string>()
+      const merged = all.filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true })
+        .sort((a: any, b: any) => new Date(b.startTime ?? b.createdAt).getTime() - new Date(a.startTime ?? a.createdAt).getTime())
       return { reservations: merged, total: merged.length }
     },
     enabled: ids.length > 0,
