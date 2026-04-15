@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
+import { sendPushNotification } from '../notifications/notification.service.js'
 
 // ============================================================
 // Forum Routes
@@ -77,6 +78,24 @@ const forumRoutes: FastifyPluginAsync = async (fastify) => {
           _count: { select: { comments: true, likes: true } },
         },
       })
+
+      // Notify all active community members except the author
+      try {
+        const communityUsers = await fastify.prisma.communityUser.findMany({
+          where: { communityId: req.params.communityId, isActive: true, userId: { not: req.user.sub } },
+          select: { userId: true },
+        })
+        const userIds = communityUsers.map((cu) => cu.userId)
+        if (userIds.length > 0) {
+          await sendPushNotification(fastify.prisma, {
+            userIds,
+            title: `📢 ${post.author.firstName} publicó en el foro`,
+            body: post.body.length > 100 ? post.body.substring(0, 97) + '...' : post.body,
+            type: 'announcement',
+            data: { postId: post.id, communityId: req.params.communityId },
+          })
+        }
+      } catch { /* never crash a request for push failures */ }
 
       return reply.code(201).send({ ...post, likedByMe: false })
     },

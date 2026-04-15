@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 import api from '@/lib/api'
-import { formatDate, fullName, PRIORITY_COLOR, PRIORITY_LABEL } from '@/lib/utils'
+import { formatDate, fullName, PRIORITY_COLOR, PRIORITY_LABEL, ROLE_LABEL } from '@/lib/utils'
 import { Plus, X, CheckCircle2, Clock, AlertCircle, Trash2, Edit2 } from 'lucide-react'
 
 const TASK_STATUS_LABEL: Record<string, string> = {
@@ -89,16 +89,17 @@ function useDeleteTask() {
   })
 }
 
-function useStaff() {
+function useAssignableUsers() {
   const { activeCommunityId, activeCommunityIds } = useAuthStore()
   const id = activeCommunityId ?? activeCommunityIds[0]
   return useQuery({
-    queryKey: ['staff-for-tasks', id],
+    queryKey: ['assignable-users', id],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${id}/staff`)
-      return data.staff ?? data
+      const { data } = await api.get(`/communities/${id}/tasks/assignable-users`)
+      return data.users ?? []
     },
     enabled: !!id,
+    staleTime: 60_000,
   })
 }
 
@@ -119,14 +120,14 @@ export default function TasksPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editTask, setEditTask] = useState<any>(null)
   const { data: tasks, isLoading } = useTasks(tab)
-  const { data: staffData } = useStaff()
+  const { data: assignableData } = useAssignableUsers()
   const createTask = useCreateTask()
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
   const { user, activeCommunityIds } = useAuthStore()
   const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.communityRole === 'COMMUNITY_ADMIN' || user?.role === 'COMMUNITY_ADMIN' || user?.communityRole === 'MANAGER'
-  const staff: any[] = staffData ?? []
+  const staff: any[] = assignableData ?? []
 
   const [form, setForm] = useState({ title: '', description: '', priority: 'MEDIUM', assigneeId: '', dueDate: '' })
   const [formError, setFormError] = useState('')
@@ -205,7 +206,7 @@ export default function TasksPage() {
                 <label className="label">Asignar a</label>
                 <select className="input" value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
                   <option value="">Sin asignar</option>
-                  {staff.map((s: any) => <option key={s.id} value={s.user?.id ?? s.id}>{fullName(s.user)} — {s.position}</option>)}
+                  {staff.map((s: any) => <option key={s.id} value={s.id}>{fullName(s)} — {ROLE_LABEL[s.communityRole] ?? s.communityRole}</option>)}
                 </select>
               </div>
             )}

@@ -225,7 +225,8 @@ export default function StaffScreen() {
 
   const { data: shiftData, isLoading: shiftLoading, refetch: refetchShift, isRefetching } = useActiveShift()
   const { data: history, refetch: refetchHistory } = useShiftHistory()
-  const { data: staffList, isLoading: staffLoading, refetch: refetchStaff } = useStaffList()
+  const { data: staffData, isLoading: staffLoading, refetch: refetchStaff } = useStaffList()
+  const staffList = staffData?.staff ?? (Array.isArray(staffData) ? staffData : [])
   const { mutateAsync: doCheckIn, isPending: checkingIn } = useCheckIn()
   const { mutateAsync: doCheckOut, isPending: checkingOut } = useCheckOut()
 

@@ -65,6 +65,29 @@ const taskRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── List assignable users (non-resident members) ─────────
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/tasks/assignable-users',
+    { preHandler: [fastify.authenticate] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const members = await fastify.prisma.communityUser.findMany({
+        where: {
+          communityId,
+          isActive: true,
+          role: { not: UserRole.RESIDENT },
+        },
+        select: {
+          userId: true,
+          role: true,
+          user: { select: { id: true, firstName: true, lastName: true, email: true, avatarUrl: true } },
+        },
+        orderBy: [{ role: 'asc' }, { user: { lastName: 'asc' } }],
+      })
+      return reply.send({ users: members.map((m) => ({ ...m.user, communityRole: m.role })) })
+    },
+  )
+
   // ── Create task ───────────────────────────────────────────
   fastify.post<{
     Params: { communityId: string }
