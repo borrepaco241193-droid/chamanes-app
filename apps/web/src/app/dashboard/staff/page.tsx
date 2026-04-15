@@ -1,5 +1,6 @@
 'use client'
 import { useStaff, useCreateStaff, useDeleteStaff } from '@/hooks/useStaff'
+import { useAuthStore } from '@/store/auth.store'
 import { fullName, formatDate } from '@/lib/utils'
 import { UserCog, Plus, X, UserX } from 'lucide-react'
 import { useState } from 'react'
@@ -15,10 +16,15 @@ export default function StaffPage() {
   const staff = Array.isArray(staffData) ? staffData : []
   const createStaff = useCreateStaff()
   const deleteStaff = useDeleteStaff()
+  const { user, activeCommunityId, activeCommunityIds } = useAuthStore()
+
+  const communities = user?.communities ?? []
+  const hasMultiple = communities.length > 1
+  const defaultCommunityId = activeCommunityId ?? activeCommunityIds[0] ?? communities[0]?.id ?? ''
 
   const [showCreate, setShowCreate] = useState(false)
   const [createdPassword, setCreatedPassword] = useState<string | null>(null)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD' })
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', communityId: defaultCommunityId })
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,7 +32,7 @@ export default function StaffPage() {
     const pwd = result?.data?.tempPassword ?? result?.tempPassword
     if (pwd) setCreatedPassword(pwd)
     else setShowCreate(false)
-    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD' })
+    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', communityId: defaultCommunityId })
   }
 
   return (
@@ -101,6 +107,15 @@ export default function StaffPage() {
       {showCreate && (
         <Modal title="Agregar personal" onClose={() => setShowCreate(false)}>
           <form onSubmit={handleCreate} className="space-y-4">
+            {hasMultiple && (
+              <div>
+                <label className="label">Residencial</label>
+                <select className="input" value={form.communityId} onChange={(e) => setForm({ ...form, communityId: e.target.value })} required>
+                  <option value="">Selecciona un residencial...</option>
+                  {communities.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label">Nombre</label><input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></div>
               <div><label className="label">Apellido</label><input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></div>

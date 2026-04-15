@@ -6,9 +6,11 @@ export function useCreateStaff() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: (body: object) =>
-      api.post(`/communities/${activeCommunityId}/residents`, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['staff', activeCommunityId] }),
+    mutationFn: ({ communityId, ...body }: { communityId?: string; [key: string]: any }) => {
+      const id = communityId ?? activeCommunityId
+      return api.post(`/communities/${id}/residents`, body).then((r) => r.data)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['staff'] }),
   })
 }
 
