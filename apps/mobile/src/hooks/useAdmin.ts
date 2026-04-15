@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminService, type DashboardStats } from '../services/admin.service'
-import { useAuthStore } from '../stores/auth.store'
 import { useActiveCommunityIds, usePrimaryCommunityId } from './useActiveCommunityIds'
 
 export function useDashboardStats() {
@@ -16,22 +15,29 @@ export function useDashboardStats() {
       // Sum all stats across communities
       return fulfilled.reduce((acc, s) => ({
         units: {
-          total: acc.units.total + s.units.total,
-          occupied: acc.units.occupied + s.units.occupied,
-          vacant: acc.units.vacant + s.units.vacant,
+          total: acc.units.total + (s.units?.total ?? 0),
+          occupied: acc.units.occupied + (s.units?.occupied ?? 0),
+          vacant: acc.units.vacant + (s.units?.vacant ?? 0),
         },
-        residents: acc.residents + s.residents,
+        residents: acc.residents + (s.residents ?? 0),
         payments: {
-          pending: acc.payments.pending + s.payments.pending,
-          collectedThisMonth: acc.payments.collectedThisMonth + s.payments.collectedThisMonth,
+          pending: acc.payments.pending + (s.payments?.pending ?? 0),
+          collectedThisMonth: acc.payments.collectedThisMonth + (s.payments?.collectedThisMonth ?? 0),
         },
         visitors: {
-          activePasses: acc.visitors.activePasses + s.visitors.activePasses,
-          todayEvents: acc.visitors.todayEvents + s.visitors.todayEvents,
+          activePasses: acc.visitors.activePasses + (s.visitors?.activePasses ?? 0),
+          todayEvents: acc.visitors.todayEvents + (s.visitors?.todayEvents ?? 0),
         },
         workOrders: {
-          open: acc.workOrders.open + s.workOrders.open,
-          urgent: acc.workOrders.urgent + s.workOrders.urgent,
+          open: acc.workOrders.open + (s.workOrders?.open ?? 0),
+          urgent: acc.workOrders.urgent + (s.workOrders?.urgent ?? 0),
+        },
+        staff: {
+          onDuty: acc.staff.onDuty + (s.staff?.onDuty ?? 0),
+        },
+        reservations: {
+          pending: acc.reservations.pending + (s.reservations?.pending ?? 0),
+          upcoming: acc.reservations.upcoming + (s.reservations?.upcoming ?? 0),
         },
       }), {
         units: { total: 0, occupied: 0, vacant: 0 },
@@ -39,6 +45,8 @@ export function useDashboardStats() {
         payments: { pending: 0, collectedThisMonth: 0 },
         visitors: { activePasses: 0, todayEvents: 0 },
         workOrders: { open: 0, urgent: 0 },
+        staff: { onDuty: 0 },
+        reservations: { pending: 0, upcoming: 0 },
       })
     },
     enabled: ids.length > 0,
