@@ -83,7 +83,16 @@ export const useAuthStore = create<AuthState>()(
         activeCommunityId: s.activeCommunityId,
         activeCommunityIds: s.activeCommunityIds,
       }),
-      onRehydrateStorage: () => (state) => { state?.setHydrated() },
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated()
+        // Restore tokens to sessionStorage after page refresh.
+        // sessionStorage is cleared on tab close but zustand persists tokens in localStorage.
+        // Without this, every post-refresh API call fails with 401 → redirect to /login.
+        if (state?.tokens && typeof window !== 'undefined') {
+          sessionStorage.setItem('access-token', state.tokens.accessToken)
+          sessionStorage.setItem('refresh-token', state.tokens.refreshToken)
+        }
+      },
     },
   ),
 )
