@@ -350,7 +350,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     if (!user) return reply.code(404).send({ error: 'Not Found', message: 'Usuario no encontrado.' })
     const bcrypt = await import('bcryptjs')
     const hashed = await bcrypt.default.hash(newPassword, 10)
-    await fastify.prisma.user.update({ where: { email }, data: { password: hashed } })
+    await fastify.prisma.user.update({ where: { email }, data: { passwordHash: hashed } })
     return reply.send({ ok: true, message: `Contraseña actualizada para ${email}` })
   })
 
