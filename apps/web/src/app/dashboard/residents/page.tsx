@@ -105,70 +105,67 @@ export default function ResidentsPage() {
                   <p className="text-gray-400">No hay residentes registrados</p>
                 </td></tr>
               )}
-              {residents.map((r: any) => {
-                const idStatus = r.user?.idVerificationStatus ?? 'NOT_SUBMITTED'
-                return (
-                  <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="table-td">
-                      <div className="flex items-center gap-3">
-                        {r.user?.avatarUrl
-                          ? <Image src={r.user.avatarUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
-                          : <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-semibold text-brand-700">
-                            {r.user?.firstName?.[0]}{r.user?.lastName?.[0]}
-                          </div>
-                        }
-                        <span className="font-medium">{fullName(r.user)}</span>
-                      </div>
-                    </td>
-                    <td className="table-td text-gray-500">{r.user?.email ?? '—'}</td>
-                    <td className="table-td text-gray-500">{r.phone ?? r.user?.phone ?? '—'}</td>
-                    <td className="table-td">
-                      {r.units?.length > 0
-                        ? r.units.map((u: any) => (
-                          <span key={u.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700 mr-1">
-                            {u.number} {u.isPrimary && '★'}
-                          </span>
-                        ))
-                        : <span className="text-gray-400">—</span>
+              {residents.map((r: any) => (
+                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="table-td">
+                    <div className="flex items-center gap-3">
+                      {r.user?.avatarUrl
+                        ? <Image src={r.user.avatarUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+                        : <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-semibold text-brand-700">
+                          {r.user?.firstName?.[0]}{r.user?.lastName?.[0]}
+                        </div>
                       }
-                    </td>
-                    <td className="table-td">
-                      <span className="badge bg-blue-100 text-blue-800">{ROLE_LABEL[r.role] ?? r.role}</span>
-                    </td>
-                    <td className="table-td">
-                      <span className={`badge ${ID_STATUS_COLOR[idStatus]}`}>
-                        {ID_STATUS_LABEL[idStatus]}
-                      </span>
-                    </td>
-                    <td className="table-td text-gray-500">{formatDate(r.joinedAt)}</td>
-                    <td className="table-td">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT' }); setNewRole(r.role ?? 'RESIDENT') }}
-                          className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Cambiar rol"
-                        >
-                          <Shield className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => { setEditEmailResident({ id: r.id, name: fullName(r.user), email: r.user?.email ?? '' }); setNewEmail(r.user?.email ?? '') }}
-                          className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Cambiar correo"
-                        >
-                          <Mail className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => { if (confirm(`¿Desactivar a ${fullName(r.user)}?`)) deleteResident.mutate(r.id) }}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Desactivar residente"
-                        >
-                          <UserX className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                      <span className="font-medium">{fullName(r.user)}</span>
+                    </div>
+                  </td>
+                  <td className="table-td text-gray-500">{r.user?.email ?? '—'}</td>
+                  <td className="table-td text-gray-500">{r.phone ?? r.user?.phone ?? '—'}</td>
+                  <td className="table-td">
+                    {r.units?.length > 0
+                      ? r.units.map((u: any) => (
+                        <span key={u.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700 mr-1">
+                          {u.number} {u.isPrimary && '★'}
+                        </span>
+                      ))
+                      : <span className="text-gray-400">—</span>
+                    }
+                  </td>
+                  <td className="table-td">
+                    <span className="badge bg-blue-100 text-blue-800">{ROLE_LABEL[r.role] ?? r.role}</span>
+                  </td>
+                  <td className="table-td">
+                    <span className={`badge ${ID_STATUS_COLOR[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED']}`}>
+                      {ID_STATUS_LABEL[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED']}
+                    </span>
+                  </td>
+                  <td className="table-td text-gray-500">{formatDate(r.joinedAt)}</td>
+                  <td className="table-td">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT' }); setNewRole(r.role ?? 'RESIDENT') }}
+                        className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="Cambiar rol"
+                      >
+                        <Shield className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { setEditEmailResident({ id: r.id, name: fullName(r.user), email: r.user?.email ?? '' }); setNewEmail(r.user?.email ?? '') }}
+                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Cambiar correo"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { if (confirm(`¿Desactivar a ${fullName(r.user)}?`)) deleteResident.mutate(r.id) }}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Desactivar residente"
+                      >
+                        <UserX className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

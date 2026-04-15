@@ -30,15 +30,27 @@ const updateCommunitySchema = createCommunitySchema.partial().extend({ isActive:
 
 const communityRoutes: FastifyPluginAsync = async (fastify) => {
 
-  // ── List all communities (SUPER_ADMIN) ─────────────────────
+  // ── List communities (SUPER_ADMIN sees all; COMMUNITY_ADMIN/MANAGER sees their own) ─
   fastify.get<{ Querystring: { search?: string } }>(
     '/',
-    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
     async (req, reply) => {
       const { search } = req.query
+      const isSuperAdmin = req.user.role === 'SUPER_ADMIN'
+
+      let idFilter: { id?: { in: string[] } } = {}
+      if (!isSuperAdmin) {
+        const memberships = await fastify.prisma.communityUser.findMany({
+          where: { userId: req.user.sub, isActive: true },
+          select: { communityId: true },
+        })
+        idFilter = { id: { in: memberships.map((m) => m.communityId) } }
+      }
+
       const communities = await fastify.prisma.community.findMany({
         where: {
           isActive: true,
+          ...idFilter,
           ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
         },
         orderBy: { name: 'asc' },
