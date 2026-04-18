@@ -386,6 +386,34 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── IDENTITY VERIFICATION (admin approves) ────────────────
 
+  // POST /communities/:id/admin/seed-id — TEST DATA: simulate a resident uploading their ID
+  fastify.post<{ Params: { communityId: string } }>(
+    '/:communityId/admin/seed-id',
+    { preHandler: adminOnly },
+    async (req, reply) => {
+      const { communityId } = req.params
+      // Pick the first active resident that has NOT submitted yet or was rejected
+      const cu = await fastify.prisma.communityUser.findFirst({
+        where: {
+          communityId,
+          isActive: true,
+          user: { idVerificationStatus: { in: ['NOT_SUBMITTED', 'REJECTED'] } },
+        },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: { createdAt: 'asc' },
+      })
+      if (!cu) {
+        return reply.code(404).send({ error: 'No hay residentes disponibles para simular una verificación. Todos ya tienen un envío pendiente o aprobado.' })
+      }
+      const placeholderUrl = 'https://placehold.co/800x500/dbeafe/1e40af/png?text=INE+PRUEBA'
+      await fastify.prisma.user.update({
+        where: { id: cu.userId },
+        data: { idPhotoUrl: placeholderUrl, idVerified: false, idVerificationStatus: 'PENDING' },
+      })
+      return reply.send({ ok: true, user: cu.user })
+    },
+  )
+
   // GET /communities/:id/admin/id-pending — legacy compat: only pending
   fastify.get<{ Params: { communityId: string } }>(
     '/:communityId/admin/id-pending',

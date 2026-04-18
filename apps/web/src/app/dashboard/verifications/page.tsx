@@ -1,8 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { useIdVerifications, useVerifyId } from '@/hooks/useStaff'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@/store/auth.store'
+import api from '@/lib/api'
 import { formatDate, fullName, ID_STATUS_COLOR, ID_STATUS_LABEL } from '@/lib/utils'
-import { ShieldCheck, ShieldAlert, ShieldX, Clock, CheckCircle2, XCircle, X, Eye, User } from 'lucide-react'
+import { ShieldCheck, ShieldAlert, ShieldX, Clock, CheckCircle2, XCircle, X, Eye, User, FlaskConical } from 'lucide-react'
 
 const TABS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const
 
@@ -45,11 +48,30 @@ export default function VerificationsPage() {
   const [photoModal, setPhotoModal] = useState<string | null>(null)
   const [rejectModal, setRejectModal] = useState<{ id: string; name: string; communityId?: string } | null>(null)
   const [rejectNote, setRejectNote] = useState('')
+  const [seeding, setSeeding] = useState(false)
+  const [seedMsg, setSeedMsg] = useState('')
   const { data, isLoading } = useIdVerifications(tab)
   const verifyId = useVerifyId()
+  const qc = useQueryClient()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
   const users = Array.isArray(data) ? data : []
 
   const pendingCount = tab === 'PENDING' ? users.length : 0
+
+  const handleSeedId = async () => {
+    setSeeding(true)
+    setSeedMsg('')
+    try {
+      const { data: res } = await api.post(`/communities/${communityId}/admin/seed-id`)
+      setSeedMsg(`Dato creado: ${res.user?.firstName} ${res.user?.lastName} ahora tiene una verificación pendiente.`)
+      qc.invalidateQueries({ queryKey: ['id-verifications'] })
+    } catch (err: any) {
+      setSeedMsg(err?.response?.data?.error ?? 'Error al crear dato de prueba')
+    } finally {
+      setSeeding(false)
+    }
+  }
 
   const handleApprove = (userId: string, communityId?: string) => verifyId.mutate({ userId, approve: true, communityId })
   const handleReject = () => {
@@ -67,13 +89,29 @@ export default function VerificationsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Verificaciones de Identidad</h1>
           <p className="text-gray-500 text-sm mt-0.5">Revisión de documentos oficiales de residentes</p>
         </div>
-        {tab === 'PENDING' && users.length > 0 && (
-          <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
-            <Clock className="w-4 h-4" />
-            {users.length} pendiente{users.length !== 1 ? 's' : ''}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {tab === 'PENDING' && users.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold px-3 py-1.5 rounded-full">
+              <Clock className="w-4 h-4" />
+              {users.length} pendiente{users.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          <button
+            onClick={handleSeedId}
+            disabled={seeding}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors disabled:opacity-50"
+            title="Simula que un residente sube su foto de ID para poder probar la verificación"
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            {seeding ? 'Creando...' : 'Dato de prueba'}
+          </button>
+        </div>
       </div>
+      {seedMsg && (
+        <div className={`text-sm px-4 py-2 rounded-xl border ${seedMsg.startsWith('Error') || seedMsg.startsWith('No hay') ? 'bg-red-50 border-red-200 text-red-700' : 'bg-violet-50 border-violet-200 text-violet-700'}`}>
+          {seedMsg}
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
