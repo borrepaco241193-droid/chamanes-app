@@ -134,14 +134,25 @@ export function useVisitorPasses(status?: string) {
 }
 
 export function useAccessEvents(limit = 50) {
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+
   return useQuery({
-    queryKey: ['access-events', activeCommunityId, limit],
+    queryKey: ['access-events', ids, limit],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${activeCommunityId}/gate/events?limit=${limit}`)
-      return data.events ?? data
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/gate/events?limit=${limit}`)
+        return (data.events ?? data).map((e: any) => ({ ...e, _communityId: ids[0] }))
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/gate/events?limit=${limit}`).then((r) => ({ communityId: id, events: r.data.events ?? r.data })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      const merged = results.flatMap((r) => (r.events ?? []).map((e: any) => ({ ...e, _communityId: r.communityId })))
+      merged.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return merged
     },
-    enabled: !!activeCommunityId,
+    enabled: ids.length > 0,
   })
 }
 

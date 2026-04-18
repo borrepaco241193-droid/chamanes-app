@@ -1,12 +1,12 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { useUnits, useResidents } from '@/hooks/useResidents'
+import { useUnits, useResidents, useCreateUnit } from '@/hooks/useResidents'
 import { useWorkOrders } from '@/hooks/useStaff'
 import {
   Home, Users, ChevronDown, ChevronUp,
   CreditCard, ClipboardList,
-  AlertCircle, CheckCircle2, Wrench,
+  AlertCircle, CheckCircle2, Wrench, Plus, X,
 } from 'lucide-react'
 
 function UnitCard({
@@ -155,8 +155,38 @@ export default function UnitsPage() {
   const { data, isLoading } = useUnits(true)
   const { data: residentsData } = useResidents()
   const { data: workOrdersData } = useWorkOrders()
+  const createUnit = useCreateUnit()
   const units = data?.units ?? []
   const stats = data?.stats
+
+  const [showCreate, setShowCreate] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [unitForm, setUnitForm] = useState({
+    number: '', block: '', floor: '', type: 'house',
+    sqMeters: '', parkingSpots: '0', ownerName: '', ownerPhone: '', notes: '',
+  })
+
+  const handleCreateUnit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreateError('')
+    try {
+      await createUnit.mutateAsync({
+        number:      unitForm.number.trim(),
+        block:       unitForm.block.trim() || null,
+        floor:       unitForm.floor !== '' ? parseInt(unitForm.floor) : null,
+        type:        unitForm.type,
+        sqMeters:    unitForm.sqMeters !== '' ? parseFloat(unitForm.sqMeters) : null,
+        parkingSpots: parseInt(unitForm.parkingSpots) || 0,
+        ownerName:   unitForm.ownerName.trim() || null,
+        ownerPhone:  unitForm.ownerPhone.trim() || null,
+        notes:       unitForm.notes.trim() || null,
+      })
+      setShowCreate(false)
+      setUnitForm({ number: '', block: '', floor: '', type: 'house', sqMeters: '', parkingSpots: '0', ownerName: '', ownerPhone: '', notes: '' })
+    } catch (err: any) {
+      setCreateError(err?.response?.data?.message ?? err?.response?.data?.error ?? 'Error al crear la unidad')
+    }
+  }
 
   // Map userId → resident (with pendingPayments)
   const residentMap = new Map<string, any>()
@@ -177,9 +207,14 @@ export default function UnitsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Unidades</h1>
-        <p className="text-gray-500 text-sm">{units.length} unidad{units.length !== 1 ? 'es' : ''} registrada{units.length !== 1 ? 's' : ''}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Unidades</h1>
+          <p className="text-gray-500 text-sm">{units.length} unidad{units.length !== 1 ? 'es' : ''} registrada{units.length !== 1 ? 's' : ''}</p>
+        </div>
+        <button onClick={() => setShowCreate(true)} className="btn-primary">
+          <Plus className="w-4 h-4" /> Nueva unidad
+        </button>
       </div>
 
       {stats && (
@@ -211,6 +246,77 @@ export default function UnitsPage() {
           <UnitCard key={u.id} unit={u} residentMap={residentMap} workOrdersByUser={workOrdersByUser} />
         ))}
       </div>
+
+      {/* Create unit modal */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowCreate(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h3 className="font-semibold text-gray-900">Nueva unidad</h3>
+              <button onClick={() => setShowCreate(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateUnit} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Número / ID *</label>
+                  <input className="input" placeholder="101, A-5, Casa 3..." value={unitForm.number} onChange={(e) => setUnitForm({ ...unitForm, number: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="label">Bloque / Sección</label>
+                  <input className="input" placeholder="A, B, Norte..." value={unitForm.block} onChange={(e) => setUnitForm({ ...unitForm, block: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Tipo</label>
+                  <select className="input" value={unitForm.type} onChange={(e) => setUnitForm({ ...unitForm, type: e.target.value })}>
+                    <option value="house">Casa</option>
+                    <option value="apartment">Apartamento</option>
+                    <option value="office">Oficina</option>
+                    <option value="commercial">Local comercial</option>
+                    <option value="other">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Piso</label>
+                  <input className="input" type="number" placeholder="1" value={unitForm.floor} onChange={(e) => setUnitForm({ ...unitForm, floor: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">m²</label>
+                  <input className="input" type="number" step="0.1" placeholder="85" value={unitForm.sqMeters} onChange={(e) => setUnitForm({ ...unitForm, sqMeters: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Estacionamientos</label>
+                  <input className="input" type="number" min="0" value={unitForm.parkingSpots} onChange={(e) => setUnitForm({ ...unitForm, parkingSpots: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Nombre del propietario</label>
+                  <input className="input" value={unitForm.ownerName} onChange={(e) => setUnitForm({ ...unitForm, ownerName: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Teléfono del propietario</label>
+                <input className="input" value={unitForm.ownerPhone} onChange={(e) => setUnitForm({ ...unitForm, ownerPhone: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Notas</label>
+                <textarea className="input" rows={2} value={unitForm.notes} onChange={(e) => setUnitForm({ ...unitForm, notes: e.target.value })} />
+              </div>
+              {createError && <p className="text-sm text-red-600">{createError}</p>}
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setShowCreate(false); setCreateError('') }} className="btn-secondary flex-1">Cancelar</button>
+                <button type="submit" disabled={createUnit.isPending} className="btn-primary flex-1">
+                  {createUnit.isPending ? 'Creando...' : 'Crear unidad'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

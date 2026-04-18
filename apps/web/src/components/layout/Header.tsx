@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { useAuthStore } from '@/store/auth.store'
 import { ROLE_LABEL, timeAgo } from '@/lib/utils'
-import { Bell, ChevronDown, Building2, X, CheckCheck } from 'lucide-react'
+import { Bell, X, CheckCheck } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
@@ -53,11 +53,8 @@ const NOTIF_LINKS: Record<string, string> = {
 }
 
 export function Header() {
-  const { user, activeCommunityId, setActiveCommunity } = useAuthStore()
-  const [showCommunities, setShowCommunities] = useState(false)
+  const { user } = useAuthStore()
   const [showNotifs, setShowNotifs] = useState(false)
-  const communities = user?.communities ?? []
-  const activeCommunity = communities.find((c) => c.id === activeCommunityId)
   const notifRef = useRef<HTMLDivElement>(null)
 
   const { data: notifData } = useNotifications()
@@ -80,39 +77,9 @@ export function Header() {
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-      {/* Community selector (SUPER_ADMIN) */}
-      {user?.role === 'SUPER_ADMIN' && communities.length > 0 && (
-        <div className="relative">
-          <button
-            onClick={() => setShowCommunities((v) => !v)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            <Building2 className="w-4 h-4 text-gray-500" />
-            <span>{activeCommunity?.name ?? 'Seleccionar comunidad'}</span>
-            <ChevronDown className="w-3 h-3 text-gray-400" />
-          </button>
-          {showCommunities && (
-            <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 py-1">
-              {communities.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => { setActiveCommunity(c.id); setShowCommunities(false) }}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between"
-                >
-                  <span className="font-medium text-gray-700">{c.name}</span>
-                  {c.id === activeCommunityId && <span className="text-xs text-brand-600 font-medium">Activa</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {user?.role !== 'SUPER_ADMIN' && (
-        <div className="text-sm text-gray-500">
-          Bienvenido, <span className="font-medium text-gray-900">{user?.firstName}</span>
-        </div>
-      )}
+      <div className="text-sm text-gray-500">
+        Bienvenido, <span className="font-medium text-gray-900">{user?.firstName}</span>
+      </div>
 
       <div className="flex items-center gap-3 ml-auto">
         <span className="text-xs px-2 py-1 bg-brand-50 text-brand-700 rounded-full font-medium">

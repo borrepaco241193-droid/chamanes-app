@@ -32,16 +32,25 @@ export default function PaymentsPage() {
     dueDate: '', periodMonth: '', periodYear: new Date().getFullYear().toString(),
   })
 
+  const [createError, setCreateError] = useState('')
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    await createPayment.mutateAsync({
-      ...form,
-      amount: parseFloat(form.amount),
-      periodMonth: form.periodMonth ? parseInt(form.periodMonth) : undefined,
-      periodYear: form.periodYear ? parseInt(form.periodYear) : undefined,
-    })
-    setShowCreate(false)
-    setForm({ userId: '', unitId: '', amount: '', description: '', type: 'MAINTENANCE_FEE', dueDate: '', periodMonth: '', periodYear: new Date().getFullYear().toString() })
+    setCreateError('')
+    const { userId: _userId, ...rest } = form
+    try {
+      await createPayment.mutateAsync({
+        ...rest,
+        amount: parseFloat(form.amount),
+        periodMonth: form.periodMonth ? parseInt(form.periodMonth) : undefined,
+        periodYear: form.periodYear ? parseInt(form.periodYear) : undefined,
+        dueDate: form.dueDate || undefined,
+      })
+      setShowCreate(false)
+      setForm({ userId: '', unitId: '', amount: '', description: '', type: 'MAINTENANCE_FEE', dueDate: '', periodMonth: '', periodYear: new Date().getFullYear().toString() })
+    } catch (err: any) {
+      setCreateError(err?.response?.data?.message ?? err?.response?.data?.error ?? 'Error al crear el cargo')
+    }
   }
 
   const tabCounts = {
@@ -184,7 +193,12 @@ export default function PaymentsPage() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <label className="label">Residente</label>
-              <select className="input" value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} required>
+              <select className="input" value={form.userId} onChange={(e) => {
+                const userId = e.target.value
+                const selectedResident = residents.find((r: any) => r.id === userId)
+                const autoUnitId = selectedResident?.units?.[0]?.id ?? ''
+                setForm({ ...form, userId, unitId: autoUnitId })
+              }} required>
                 <option value="">Seleccionar...</option>
                 {residents.map((r: any) => (
                   <option key={r.id} value={r.id}>{fullName(r.user)}</option>
@@ -233,8 +247,9 @@ export default function PaymentsPage() {
                 <input className="input" type="number" value={form.periodYear} onChange={(e) => setForm({ ...form, periodYear: e.target.value })} />
               </div>
             </div>
+            {createError && <p className="text-sm text-red-600">{createError}</p>}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button type="button" onClick={() => { setShowCreate(false); setCreateError('') }} className="btn-secondary flex-1">Cancelar</button>
               <button type="submit" disabled={createPayment.isPending} className="btn-primary flex-1">
                 {createPayment.isPending ? 'Guardando...' : 'Crear cargo'}
               </button>

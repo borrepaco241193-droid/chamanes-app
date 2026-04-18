@@ -15,11 +15,18 @@ export function useResidents(search?: string) {
         return data
       }
       const settled = await Promise.allSettled(
-        ids.map((id) => api.get(`/communities/${id}/residents${params}`).then((r) => r.data))
+        ids.map((id) => api.get(`/communities/${id}/residents${params}`).then((r) => ({ communityId: id, data: r.data })))
       )
       const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const merged = results.flatMap((r) => r.residents ?? [])
-      return { residents: merged, total: merged.length }
+      const merged = results.flatMap((r) => (r.data.residents ?? []).map((res: any) => ({ ...res, _communityId: r.communityId })))
+      // Deduplicate by User.id — same user can belong to multiple communities
+      const seen = new Set<string>()
+      const deduped = merged.filter((r: any) => {
+        if (seen.has(r.id)) return false
+        seen.add(r.id)
+        return true
+      })
+      return { residents: deduped, total: deduped.length }
     },
     enabled: ids.length > 0,
   })
@@ -41,9 +48,17 @@ export function useCreateResident() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: (body: object) =>
-      api.post(`/communities/${activeCommunityId}/residents`, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['residents', activeCommunityId] }),
+    mutationFn: ({ communityId, ...body }: { communityId?: string; [key: string]: any }) =>
+      api.post(`/communities/${communityId ?? activeCommunityId}/residents`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['residents'] }),
+  })
+}
+
+export function useAdminResetPassword() {
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: ({ userId, communityId }: { userId: string; communityId?: string }) =>
+      api.post(`/communities/${communityId ?? activeCommunityId}/residents/${userId}/reset-password`).then((r) => r.data),
   })
 }
 
@@ -71,9 +86,19 @@ export function useChangeRole() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
-      api.patch(`/communities/${activeCommunityId}/residents/${userId}/role`, { role }).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['residents', activeCommunityId] }),
+    mutationFn: ({ userId, role, communityId }: { userId: string; role: string; communityId?: string }) =>
+      api.patch(`/communities/${communityId ?? activeCommunityId}/residents/${userId}/role`, { role }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['residents'] }),
+  })
+}
+
+export function useCreateUnit() {
+  const qc = useQueryClient()
+  const { activeCommunityId } = useAuthStore()
+  return useMutation({
+    mutationFn: (body: object) =>
+      api.post(`/communities/${activeCommunityId}/units`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['units'] }),
   })
 }
 
@@ -90,11 +115,11 @@ export function useUnits(withStats = false) {
         return data
       }
       const settled = await Promise.allSettled(
-        ids.map((id) => api.get(`/communities/${id}/units${suffix}`).then((r) => r.data))
+        ids.map((id) => api.get(`/communities/${id}/units${suffix}`).then((r) => ({ communityId: id, data: r.data })))
       )
       const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
-      const allUnits = results.flatMap((r) => r.units ?? [])
-      const allStats = results.map((r) => r.stats).filter(Boolean)
+      const allUnits = results.flatMap((r: any) => (r.data.units ?? []).map((u: any) => ({ ...u, _communityId: r.communityId })))
+      const allStats = results.map((r: any) => r.data.stats).filter(Boolean)
       const mergedStats = allStats.length > 0 ? allStats.reduce((acc, s) => ({
         total: (acc.total ?? 0) + (s.total ?? 0),
         occupied: (acc.occupied ?? 0) + (s.occupied ?? 0),

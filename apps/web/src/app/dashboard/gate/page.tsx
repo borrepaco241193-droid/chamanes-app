@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useAccessEvents } from '@/hooks/useStaff'
 import { formatDateTime } from '@/lib/utils'
-import { DoorOpen, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react'
+import { DoorOpen, ArrowUp, ArrowDown, RefreshCw, Download } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 
@@ -15,11 +15,37 @@ const TYPE_COLOR: Record<string, string> = {
   EXIT: 'text-red-500 bg-red-50',
 }
 
+function downloadCSV(events: any[], communityMap: Record<string, string>) {
+  const header = ['Tipo', 'Persona', 'Tipo persona', 'Método', 'Placa', 'Autorizado', 'Fecha y hora', 'Residencial', 'Notas']
+  const rows = events.map((e) => [
+    e.type === 'ENTRY' ? 'Entrada' : 'Salida',
+    e.personName ?? '',
+    e.personType ?? '',
+    METHOD_LABEL[e.method] ?? e.method ?? '',
+    e.plateNumber ?? '',
+    e.isAllowed ? 'Sí' : 'No',
+    formatDateTime(e.createdAt),
+    communityMap[e._communityId] ?? '',
+    e.notes ?? e.deniedReason ?? '',
+  ])
+  const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `accesos_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function GatePage() {
   const [limit, setLimit] = useState(50)
   const { data, isLoading } = useAccessEvents(limit)
   const qc = useQueryClient()
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds, user } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+  const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
+  const hasMultiple = ids.length > 1
   const events = Array.isArray(data) ? data : []
 
   return (
@@ -29,12 +55,22 @@ export default function GatePage() {
           <h1 className="text-2xl font-bold text-gray-900">Control de Acceso</h1>
           <p className="text-gray-500 text-sm">Registro de entradas y salidas</p>
         </div>
-        <button
-          onClick={() => qc.invalidateQueries({ queryKey: ['access-events', activeCommunityId] })}
-          className="btn-secondary"
-        >
-          <RefreshCw className="w-4 h-4" /> Actualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => downloadCSV(events, communityMap)}
+            disabled={events.length === 0}
+            className="btn-secondary"
+            title="Descargar CSV"
+          >
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button
+            onClick={() => qc.invalidateQueries({ queryKey: ['access-events', ids, limit] })}
+            className="btn-secondary"
+          >
+            <RefreshCw className="w-4 h-4" /> Actualizar
+          </button>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -49,13 +85,14 @@ export default function GatePage() {
                 <th className="table-th">Placa</th>
                 <th className="table-th">Autorizado</th>
                 <th className="table-th">Fecha y hora</th>
+                {hasMultiple && <th className="table-th">Residencial</th>}
                 <th className="table-th">Notas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {isLoading && <tr><td colSpan={8} className="table-td text-center text-gray-400 py-8">Cargando...</td></tr>}
+              {isLoading && <tr><td colSpan={hasMultiple ? 9 : 8} className="table-td text-center text-gray-400 py-8">Cargando...</td></tr>}
               {!isLoading && events.length === 0 && (
-                <tr><td colSpan={8} className="table-td text-center py-12">
+                <tr><td colSpan={hasMultiple ? 9 : 8} className="table-td text-center py-12">
                   <DoorOpen className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                   <p className="text-gray-400">Sin eventos de acceso</p>
                 </td></tr>
@@ -78,6 +115,7 @@ export default function GatePage() {
                     </span>
                   </td>
                   <td className="table-td text-gray-500">{formatDateTime(e.createdAt)}</td>
+                  {hasMultiple && <td className="table-td text-gray-500">{communityMap[e._communityId] ?? '—'}</td>}
                   <td className="table-td text-gray-500">{e.notes ?? e.deniedReason ?? '—'}</td>
                 </tr>
               ))}

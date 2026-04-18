@@ -3,14 +3,23 @@ import { useAuthStore } from '@/store/auth.store'
 import api from '@/lib/api'
 
 export function useAreas() {
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds } = useAuthStore()
+  const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
+
   return useQuery({
-    queryKey: ['areas', activeCommunityId],
+    queryKey: ['areas', ids],
     queryFn: async () => {
-      const { data } = await api.get(`/communities/${activeCommunityId}/common-areas`)
-      return data.areas ?? data
+      if (ids.length <= 1) {
+        const { data } = await api.get(`/communities/${ids[0]}/common-areas`)
+        return (data.areas ?? data).map((a: any) => ({ ...a, _communityId: ids[0] }))
+      }
+      const settled = await Promise.allSettled(
+        ids.map((id) => api.get(`/communities/${id}/common-areas`).then((r) => ({ communityId: id, areas: r.data.areas ?? r.data })))
+      )
+      const results = settled.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled').map((r) => r.value)
+      return results.flatMap((r) => (r.areas ?? []).map((a: any) => ({ ...a, _communityId: r.communityId })))
     },
-    enabled: !!activeCommunityId,
+    enabled: ids.length > 0,
   })
 }
 
@@ -18,9 +27,9 @@ export function useCreateArea() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: (body: object) =>
-      api.post(`/communities/${activeCommunityId}/common-areas`, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas', activeCommunityId] }),
+    mutationFn: ({ communityId, ...body }: { communityId?: string; [key: string]: any }) =>
+      api.post(`/communities/${communityId ?? activeCommunityId}/common-areas`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas'] }),
   })
 }
 
@@ -28,9 +37,9 @@ export function useUpdateArea() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: ({ areaId, body }: { areaId: string; body: object }) =>
-      api.patch(`/communities/${activeCommunityId}/common-areas/${areaId}`, body).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas', activeCommunityId] }),
+    mutationFn: ({ areaId, communityId, body }: { areaId: string; communityId?: string; body: object }) =>
+      api.patch(`/communities/${communityId ?? activeCommunityId}/common-areas/${areaId}`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas'] }),
   })
 }
 
@@ -38,9 +47,9 @@ export function useDeleteArea() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: (areaId: string) =>
-      api.delete(`/communities/${activeCommunityId}/common-areas/${areaId}`).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas', activeCommunityId] }),
+    mutationFn: ({ areaId, communityId }: { areaId: string; communityId?: string }) =>
+      api.delete(`/communities/${communityId ?? activeCommunityId}/common-areas/${areaId}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['areas'] }),
   })
 }
 
@@ -54,7 +63,7 @@ export function useReservations(status?: string) {
       const params = status && status !== 'ALL' ? `?status=${status}` : ''
       if (ids.length <= 1) {
         const { data } = await api.get(`/communities/${ids[0]}/reservations${params}`)
-        return data.reservations ?? data
+        return (data.reservations ?? data).map((r: any) => ({ ...r, _communityId: ids[0] }))
       }
       const settled = await Promise.allSettled(
         ids.map((id) => api.get(`/communities/${id}/reservations${params}`).then((r) => ({ communityId: id, data: r.data })))
@@ -72,8 +81,8 @@ export function useCreateReservation() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: (body: object) =>
-      api.post(`/communities/${activeCommunityId}/reservations`, body).then((r) => r.data),
+    mutationFn: ({ communityId, ...body }: { communityId?: string; [key: string]: any }) =>
+      api.post(`/communities/${communityId ?? activeCommunityId}/reservations`, body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
   })
 }
@@ -82,8 +91,8 @@ export function useUpdateReservation() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: ({ reservationId, status }: { reservationId: string; status: string }) =>
-      api.patch(`/communities/${activeCommunityId}/reservations/${reservationId}`, { status }).then((r) => r.data),
+    mutationFn: ({ reservationId, status, communityId }: { reservationId: string; status: string; communityId?: string }) =>
+      api.patch(`/communities/${communityId ?? activeCommunityId}/reservations/${reservationId}`, { status }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),
   })
 }
@@ -92,10 +101,10 @@ export function useApproveReservation() {
   const qc = useQueryClient()
   const { activeCommunityId } = useAuthStore()
   return useMutation({
-    mutationFn: ({ reservationId, approve, extraCharge, chargeNote }: {
-      reservationId: string; approve: boolean; extraCharge?: number; chargeNote?: string
+    mutationFn: ({ reservationId, approve, extraCharge, chargeNote, communityId }: {
+      reservationId: string; approve: boolean; extraCharge?: number; chargeNote?: string; communityId?: string
     }) =>
-      api.patch(`/communities/${activeCommunityId}/reservations/${reservationId}/approve`, {
+      api.patch(`/communities/${communityId ?? activeCommunityId}/reservations/${reservationId}/approve`, {
         approve, extraCharge, chargeNote,
       }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reservations'] }),

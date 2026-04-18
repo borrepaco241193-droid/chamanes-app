@@ -112,7 +112,13 @@ export default function SettingsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await update.mutateAsync(form)
+    const payload = {
+      ...form,
+      email: form.email.trim() || null,
+      phone: form.phone.trim() || null,
+      zipCode: form.zipCode.trim() || null,
+    }
+    await update.mutateAsync(payload)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }

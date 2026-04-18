@@ -36,7 +36,7 @@ export function useCreatePayment() {
   const { activeCommunityId } = useAuthStore()
   return useMutation({
     mutationFn: (body: object) =>
-      api.post(`/communities/${activeCommunityId}/payments`, body).then((r) => r.data),
+      api.post(`/communities/${activeCommunityId}/payments/charge`, body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payments'] }),
   })
 }

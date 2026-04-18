@@ -12,6 +12,7 @@ export default function ForgotPasswordPage() {
   const send = useMutation({
     mutationFn: () => api.post('/auth/forgot-password', { email }),
     onSuccess: () => setSent(true),
+    onError: () => setSent(true), // Same UX — don't reveal if email exists
   })
 
   return (

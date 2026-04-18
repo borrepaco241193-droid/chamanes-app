@@ -1,8 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { useResidents, useCreateResident, useDeleteResident, useUnits, useUpdateResident, useChangeRole } from '@/hooks/useResidents'
+import { useResidents, useCreateResident, useDeleteResident, useUnits, useUpdateResident, useChangeRole, useAdminResetPassword } from '@/hooks/useResidents'
+import { useAuthStore } from '@/store/auth.store'
 import { fullName, formatDate, ROLE_LABEL, ID_STATUS_COLOR, ID_STATUS_LABEL } from '@/lib/utils'
-import { Plus, Search, UserX, X, Users, Mail, Shield } from 'lucide-react'
+import { Plus, Search, UserX, X, Users, Mail, Shield, KeyRound } from 'lucide-react'
 import Image from 'next/image'
 
 const ROLE_OPTIONS = [
@@ -23,19 +24,37 @@ export default function ResidentsPage() {
   const createResident = useCreateResident()
   const updateResident = useUpdateResident()
   const changeRole = useChangeRole()
+  const resetPassword = useAdminResetPassword()
+  const { user, activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communities = user?.communities ?? []
+  const hasMultiple = communities.length > 1
+  const defaultCommunityId = activeCommunityId ?? activeCommunityIds[0] ?? communities[0]?.id ?? ''
   const residents = data?.residents ?? []
+
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ name: string; password: string } | null>(null)
+  const handleResetPassword = async (r: any) => {
+    if (!confirm(`¿Generar nueva contraseña temporal para ${fullName(r.user)}?`)) return
+    const result = await resetPassword.mutateAsync({ userId: r.id, communityId: r._communityId })
+    if (result?.tempPassword) setResetPasswordResult({ name: fullName(r.user), password: result.tempPassword })
+  }
 
   const [editEmailResident, setEditEmailResident] = useState<{ id: string; name: string; email: string } | null>(null)
   const [newEmail, setNewEmail] = useState('')
-  const [changeRoleResident, setChangeRoleResident] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [changeRoleResident, setChangeRoleResident] = useState<{ id: string; name: string; role: string; communityId?: string } | null>(null)
   const [newRole, setNewRole] = useState('')
+  const [roleError, setRoleError] = useState('')
 
   const handleChangeRole = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!changeRoleResident) return
-    await changeRole.mutateAsync({ userId: changeRoleResident.id, role: newRole })
-    setChangeRoleResident(null)
-    setNewRole('')
+    setRoleError('')
+    try {
+      await changeRole.mutateAsync({ userId: changeRoleResident.id, role: newRole, communityId: changeRoleResident.communityId })
+      setChangeRoleResident(null)
+      setNewRole('')
+    } catch (err: any) {
+      setRoleError(err?.response?.data?.message ?? 'Error al cambiar el rol')
+    }
   }
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,19 +67,25 @@ export default function ResidentsPage() {
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', role: 'RESIDENT',
-    unitId: '', occupancyType: 'OWNER', isPrimary: true,
+    unitId: '', occupancyType: 'OWNER', isPrimary: true, communityId: defaultCommunityId,
   })
+
+  const communityUnits = (unitsData?.units ?? []).filter((u: any) =>
+    !hasMultiple || !u._communityId || u._communityId === form.communityId
+  )
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    const { communityId, ...rest } = form
     const result = await createResident.mutateAsync({
-      ...form,
+      ...rest,
+      communityId,
       unitId: form.unitId || undefined,
     })
     const pwd = result?.data?.tempPassword ?? result?.tempPassword
     if (pwd) setCreatedPassword(pwd)
     else setShowCreate(false)
-    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'RESIDENT', unitId: '', occupancyType: 'OWNER', isPrimary: true })
+    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'RESIDENT', unitId: '', occupancyType: 'OWNER', isPrimary: true, communityId: defaultCommunityId })
   }
 
   return (
@@ -142,7 +167,7 @@ export default function ResidentsPage() {
                   <td className="table-td">
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT' }); setNewRole(r.role ?? 'RESIDENT') }}
+                        onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT', communityId: r._communityId }); setNewRole(r.role ?? 'RESIDENT') }}
                         className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
                         title="Cambiar rol"
                       >
@@ -154,6 +179,13 @@ export default function ResidentsPage() {
                         title="Cambiar correo"
                       >
                         <Mail className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleResetPassword(r)}
+                        className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
+                        title="Nueva contraseña temporal"
+                      >
+                        <KeyRound className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => { if (confirm(`¿Desactivar a ${fullName(r.user)}?`)) deleteResident.mutate(r.id) }}
@@ -175,6 +207,15 @@ export default function ResidentsPage() {
       {showCreate && (
         <Modal title="Agregar residente" onClose={() => setShowCreate(false)}>
           <form onSubmit={handleCreate} className="space-y-4">
+            {hasMultiple && (
+              <div>
+                <label className="label">Residencial</label>
+                <select className="input" value={form.communityId} onChange={(e) => setForm({ ...form, communityId: e.target.value, unitId: '' })} required>
+                  <option value="">Selecciona un residencial...</option>
+                  {communities.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label">Nombre</label><input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></div>
               <div><label className="label">Apellido</label><input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></div>
@@ -196,7 +237,7 @@ export default function ResidentsPage() {
                 <label className="label">Unidad (opcional)</label>
                 <select className="input" value={form.unitId} onChange={(e) => setForm({ ...form, unitId: e.target.value })}>
                   <option value="">Sin asignar</option>
-                  {units.map((u: any) => (
+                  {communityUnits.map((u: any) => (
                     <option key={u.id} value={u.id}>{u.number}{u.block ? ` · Bloque ${u.block}` : ''}</option>
                   ))}
                 </select>
@@ -250,13 +291,29 @@ export default function ResidentsPage() {
                 ))}
               </select>
             </div>
+            {roleError && <p className="text-sm text-red-600">{roleError}</p>}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setChangeRoleResident(null); setNewRole('') }} className="btn-secondary flex-1">Cancelar</button>
+              <button type="button" onClick={() => { setChangeRoleResident(null); setNewRole(''); setRoleError('') }} className="btn-secondary flex-1">Cancelar</button>
               <button type="submit" disabled={changeRole.isPending || newRole === changeRoleResident.role} className="btn-primary flex-1">
                 {changeRole.isPending ? 'Guardando...' : 'Cambiar rol'}
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Admin reset password modal */}
+      {resetPasswordResult && (
+        <Modal title="Contraseña temporal" onClose={() => setResetPasswordResult(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Nueva contraseña temporal para <strong>{resetPasswordResult.name}</strong>:</p>
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+              <p className="text-xs text-amber-600 mb-1">Contraseña temporal</p>
+              <code className="text-xl font-bold text-amber-900 tracking-widest">{resetPasswordResult.password}</code>
+            </div>
+            <p className="text-xs text-gray-400">Comparte esta contraseña con el usuario. Deberá cambiarla al iniciar sesión.</p>
+            <button onClick={() => setResetPasswordResult(null)} className="btn-primary w-full">Entendido</button>
+          </div>
         </Modal>
       )}
 

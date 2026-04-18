@@ -45,11 +45,12 @@ function ApproveModal({ reservation, onClose, approve }: { reservation: any; onC
       approve: true,
       extraCharge: extraCharge ? parseFloat(extraCharge) : undefined,
       chargeNote: chargeNote || undefined,
+      communityId: reservation._communityId ?? reservation.communityId,
     })
     onClose()
   }
   const handleReject = async () => {
-    await approve.mutateAsync({ reservationId: reservation.id, approve: false })
+    await approve.mutateAsync({ reservationId: reservation.id, approve: false, communityId: reservation._communityId ?? reservation.communityId })
     onClose()
   }
 
@@ -112,12 +113,14 @@ function CreateReservationModal({ defaultDate, areas, onClose, create }: {
     e.preventDefault()
     setError('')
     try {
+      const selectedArea = areas.find((a) => a.id === form.commonAreaId)
       await create.mutateAsync({
         commonAreaId: form.commonAreaId,
         startTime: new Date(`${form.startDate}T${form.startTime}:00`).toISOString(),
         endTime: new Date(`${form.startDate}T${form.endTime}:00`).toISOString(),
         attendees: parseInt(form.attendees),
         notes: form.notes || undefined,
+        communityId: selectedArea?._communityId,
       })
       onClose()
     } catch (err: any) {
@@ -331,7 +334,7 @@ function CalendarView({
                     )}
                     {r.status === 'CONFIRMED' && (
                       <button
-                        onClick={() => update.mutate({ reservationId: r.id, status: 'CANCELLED' })}
+                        onClick={() => update.mutate({ reservationId: r.id, status: 'CANCELLED', communityId: r._communityId ?? r.communityId })}
                         className="p-1 text-red-500 hover:bg-red-50 rounded-lg"
                         title="Cancelar"
                       >
@@ -423,7 +426,7 @@ function TableView({ reservations, isLoading, update, approve, areas, create }: 
                     )}
                     {r.status === 'CONFIRMED' && (
                       <button
-                        onClick={() => update.mutate({ reservationId: r.id, status: 'CANCELLED' })}
+                        onClick={() => update.mutate({ reservationId: r.id, status: 'CANCELLED', communityId: r._communityId ?? r.communityId })}
                         className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
                         title="Cancelar"
                       >

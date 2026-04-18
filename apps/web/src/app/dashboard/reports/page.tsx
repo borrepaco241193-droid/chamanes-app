@@ -1,9 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useAuthStore } from '@/store/auth.store'
+import api from '@/lib/api'
 import { BarChart3, Download, FileText, Building2 } from 'lucide-react'
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const REPORTS = [
   { type: 'access',        label: 'Accesos al fraccionamiento', description: 'Registro de entradas y salidas por fecha', icon: '🚪' },
@@ -39,7 +38,7 @@ function toCSV(headers: string[], rows: string[][]): string {
 }
 
 export default function ReportsPage() {
-  const { activeCommunityId, activeCommunityIds, user, tokens } = useAuthStore()
+  const { activeCommunityId, activeCommunityIds, user } = useAuthStore()
   const ids = activeCommunityIds.length > 0 ? activeCommunityIds : (activeCommunityId ? [activeCommunityId] : [])
   const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
   const multiCommunity = ids.length > 1
@@ -52,28 +51,22 @@ export default function ReportsPage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   const download = async (type: string) => {
-    if (!ids.length || !tokens) return
+    if (!ids.length) return
     setDownloading(type)
     setSuccess(null)
     try {
       const params = new URLSearchParams({ from, to })
 
       if (!multiCommunity) {
-        // Single community — direct download
-        const url = `${API_URL}/api/v1/communities/${ids[0]}/admin/csv/${type}?${params}`
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${tokens.accessToken}` } })
-        if (!res.ok) throw new Error('Error al descargar')
-        const blob = await res.blob()
-        triggerDownload(blob, `${type}_${from}_${to}.csv`)
+        // Single community — direct download via axios (uses fresh session token)
+        const response = await api.get(`/communities/${ids[0]}/admin/csv/${type}?${params}`, { responseType: 'blob' })
+        triggerDownload(response.data, `${type}_${from}_${to}.csv`)
       } else {
         // Multi-community — fetch all, merge with a "Comunidad" column
         const settled = await Promise.allSettled(
           ids.map(async (id) => {
-            const url = `${API_URL}/api/v1/communities/${id}/admin/csv/${type}?${params}`
-            const res = await fetch(url, { headers: { Authorization: `Bearer ${tokens.accessToken}` } })
-            if (!res.ok) throw new Error(`Error en ${communityMap[id] ?? id}`)
-            const text = await res.text()
-            return { communityId: id, text }
+            const response = await api.get(`/communities/${id}/admin/csv/${type}?${params}`, { responseType: 'text' })
+            return { communityId: id, text: response.data as string }
           })
         )
 

@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useAreas, useCreateArea, useUpdateArea, useDeleteArea } from '@/hooks/useReservations'
-import { MapPin, Plus, Edit2, Trash2, X, Clock, Users } from 'lucide-react'
+import { useAuthStore } from '@/store/auth.store'
+import { MapPin, Plus, Edit2, Trash2, X, Clock, Users, ToggleLeft, ToggleRight } from 'lucide-react'
 
 export default function AreasPage() {
   const { data, isLoading } = useAreas()
@@ -12,29 +13,40 @@ export default function AreasPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [editArea, setEditArea] = useState<any>(null)
 
+  const { user, activeCommunityId, activeCommunityIds } = useAuthStore()
+  const communities = user?.communities ?? []
+  const hasMultiple = communities.length > 1
+  const defaultCommunityId = activeCommunityId ?? activeCommunityIds[0] ?? communities[0]?.id ?? ''
+
   const emptyForm = {
     name: '', description: '', capacity: '', openTime: '08:00', closeTime: '22:00',
     slotDurationMins: 60, requiresApproval: false, hasFee: false, feeAmount: '',
-    rules: '',
+    rules: '', communityId: defaultCommunityId,
   }
   const [form, setForm] = useState(emptyForm)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    await createArea.mutateAsync({ ...form, capacity: form.capacity ? parseInt(form.capacity) : undefined, feeAmount: form.feeAmount ? parseFloat(form.feeAmount) : 0 })
+    const { communityId, ...rest } = form
+    await createArea.mutateAsync({ communityId, ...rest, capacity: rest.capacity ? parseInt(rest.capacity) : undefined, feeAmount: rest.feeAmount ? parseFloat(rest.feeAmount) : 0 })
     setShowCreate(false)
     setForm(emptyForm)
   }
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    await updateArea.mutateAsync({ areaId: editArea.id, body: { ...form, capacity: form.capacity ? parseInt(form.capacity) : undefined, feeAmount: form.feeAmount ? parseFloat(form.feeAmount) : 0 } })
+    const { communityId, ...rest } = form
+    await updateArea.mutateAsync({ areaId: editArea.id, communityId: editArea._communityId, body: { ...rest, capacity: rest.capacity ? parseInt(rest.capacity) : undefined, feeAmount: rest.feeAmount ? parseFloat(rest.feeAmount) : 0 } })
     setEditArea(null)
   }
 
   const openEdit = (a: any) => {
-    setForm({ name: a.name, description: a.description ?? '', capacity: a.capacity ?? '', openTime: a.openTime, closeTime: a.closeTime, slotDurationMins: a.slotDurationMins, requiresApproval: a.requiresApproval, hasFee: a.hasFee, feeAmount: a.feeAmount ?? '', rules: a.rules ?? '' })
+    setForm({ name: a.name, description: a.description ?? '', capacity: a.capacity ?? '', openTime: a.openTime, closeTime: a.closeTime, slotDurationMins: a.slotDurationMins, requiresApproval: a.requiresApproval, hasFee: a.hasFee, feeAmount: a.feeAmount ?? '', rules: a.rules ?? '', communityId: a._communityId ?? defaultCommunityId })
     setEditArea(a)
+  }
+
+  const handleToggleActive = (a: any) => {
+    updateArea.mutate({ areaId: a.id, communityId: a._communityId, body: { isActive: !a.isActive } })
   }
 
   return (
@@ -58,8 +70,15 @@ export default function AreasPage() {
                 {a.description && <p className="text-sm text-gray-500 mt-0.5">{a.description}</p>}
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => handleToggleActive(a)}
+                  className={`p-1.5 rounded-lg transition-colors ${a.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                  title={a.isActive ? 'Desactivar área' : 'Activar área'}
+                >
+                  {a.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                </button>
                 <button onClick={() => openEdit(a)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={() => { if (confirm(`¿Eliminar ${a.name}?`)) deleteArea.mutate(a.id) }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => { if (confirm(`¿Eliminar ${a.name}?`)) deleteArea.mutate({ areaId: a.id, communityId: a._communityId }) }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
@@ -90,13 +109,16 @@ export default function AreasPage() {
           onSubmit={editArea ? handleUpdate : handleCreate}
           loading={createArea.isPending || updateArea.isPending}
           onClose={() => { setShowCreate(false); setEditArea(null); setForm(emptyForm) }}
+          communities={communities}
+          hasMultiple={hasMultiple}
+          isEdit={!!editArea}
         />
       )}
     </div>
   )
 }
 
-function AreaModal({ title, form, setForm, onSubmit, loading, onClose }: any) {
+function AreaModal({ title, form, setForm, onSubmit, loading, onClose, communities, hasMultiple, isEdit }: any) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -105,6 +127,15 @@ function AreaModal({ title, form, setForm, onSubmit, loading, onClose }: any) {
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={onSubmit} className="p-5 space-y-4">
+          {hasMultiple && !isEdit && (
+            <div>
+              <label className="label">Residencial</label>
+              <select className="input" value={form.communityId} onChange={(e) => setForm({ ...form, communityId: e.target.value })} required>
+                <option value="">Selecciona un residencial...</option>
+                {communities.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div><label className="label">Nombre del área</label><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
           <div><label className="label">Descripción</label><textarea className="input" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
           <div className="grid grid-cols-3 gap-3">

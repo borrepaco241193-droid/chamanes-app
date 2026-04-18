@@ -65,6 +65,7 @@ const createResidentSchema = z.object({
   password:     z.string().min(8).optional(), // if omitted, auto-generated
   // Community role
   role:         z.enum(['RESIDENT', 'COMMUNITY_ADMIN', 'MANAGER', 'GUARD', 'STAFF']).default('RESIDENT'),
+  position:     z.string().optional().nullable(), // Override default Staff position label
   // Unit assignment (optional — can be assigned later)
   unitId:       z.string().optional().nullable(),
   occupancyType: z.enum(['OWNER', 'TENANT']).default('OWNER'),
@@ -516,6 +517,22 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      // ── Auto-create Staff record for operational roles ────
+      const OPERATIONAL_ROLES = [UserRole.GUARD, UserRole.STAFF, UserRole.MANAGER]
+      if (OPERATIONAL_ROLES.includes(body.role as UserRole)) {
+        const positionMap: Record<string, string> = {
+          GUARD:   'Guardia de seguridad',
+          STAFF:   'Personal de servicio',
+          MANAGER: 'Manager',
+        }
+        const resolvedPosition = body.position?.trim() || positionMap[body.role] || body.role
+        await fastify.prisma.staff.upsert({
+          where: { userId },
+          update: { communityId, isActive: true, position: resolvedPosition },
+          create: { userId, communityId, position: resolvedPosition, isActive: true },
+        })
+      }
+
       // ── 2FA OTP for privileged roles ──────────────────────
       const isPrivilegedRole = body.role === 'MANAGER' || body.role === 'COMMUNITY_ADMIN'
       if (isPrivilegedRole) {
@@ -781,6 +798,25 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return reply.send({ ok: true, role })
+    },
+  )
+
+  // ── ADMIN RESET PASSWORD ──────────────────────────────────
+  fastify.post<{ Params: { communityId: string; userId: string } }>(
+    '/:communityId/residents/:userId/reset-password',
+    { preHandler: [fastify.authenticate, fastify.requireRole(...ADMIN_ROLES)] },
+    async (req, reply) => {
+      const { userId } = req.params
+      const user = await fastify.prisma.user.findUnique({ where: { id: userId } })
+      if (!user) return reply.code(404).send({ error: 'User not found' })
+
+      const tempPassword = randomBytes(6).toString('hex') // 12-char hex
+      const passwordHash = await bcrypt.hash(tempPassword, 12)
+      await fastify.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      })
+      return reply.send({ tempPassword })
     },
   )
 

@@ -24,7 +24,7 @@ export default function StaffPage() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [createdPassword, setCreatedPassword] = useState<string | null>(null)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', communityId: defaultCommunityId })
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', position: '', communityId: defaultCommunityId })
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,7 +32,7 @@ export default function StaffPage() {
     const pwd = result?.data?.tempPassword ?? result?.tempPassword
     if (pwd) setCreatedPassword(pwd)
     else setShowCreate(false)
-    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', communityId: defaultCommunityId })
+    setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'GUARD', position: '', communityId: defaultCommunityId })
   }
 
   return (
@@ -127,6 +127,10 @@ export default function StaffPage() {
               <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {STAFF_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="label">Puesto / cargo (opcional)</label>
+              <input className="input" placeholder="Ej: Guardia nocturno, Conserje, Jardinero..." value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} />
             </div>
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>

@@ -270,13 +270,19 @@ export class AuthService {
       data: { resetToken: token, resetTokenExpiresAt: expires },
     })
 
-    const resetUrl = `${env.API_URL}/reset-password?token=${token}`
+    const frontendUrl = env.FRONTEND_URL ?? env.API_URL
+    const resetUrl = `${frontendUrl}/reset-password?token=${token}`
 
-    await sendEmail({
-      to: user.email,
-      subject: 'Restablecer contraseña — Chamanes',
-      html: passwordResetEmail(user.firstName, resetUrl),
-    })
+    // Swallow email errors — never expose internal failures or reveal email existence
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Restablecer contraseña — Chamanes',
+        html: passwordResetEmail(user.firstName, resetUrl),
+      })
+    } catch (err) {
+      console.error('[Auth] Failed to send password reset email:', err)
+    }
   }
 
   // ── Reset Password ────────────────────────────────────────
