@@ -113,7 +113,8 @@ export default function GateScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const { mutateAsync: scanQR } = useScanQR()
   const { data: eventsData, refetch: refetchEvents, isRefetching } = useAccessEvents()
-  const { activeCommunityId } = useAuthStore()
+  const { activeCommunityIds, user } = useAuthStore()
+  const activeCommunityId = activeCommunityIds[0] ?? user?.communityId
 
   const sendGateCommand = useCallback(async (type: 'entry' | 'exit') => {
     if (!activeCommunityId) return
