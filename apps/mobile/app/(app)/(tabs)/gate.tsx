@@ -220,23 +220,6 @@ export default function GateScreen() {
     lastScannedRef.current = null
   }
 
-  if (!cameraPermission) {
-    return <SafeAreaView className="flex-1 bg-surface items-center justify-center"><ActivityIndicator color="#3B82F6" /></SafeAreaView>
-  }
-
-  if (!cameraPermission.granted) {
-    return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center px-8">
-        <Ionicons name="camera-outline" size={64} color="#334155" />
-        <Text className="text-white text-xl font-bold mt-4 text-center">Camera Access Required</Text>
-        <Text className="text-surface-muted text-center mt-2 mb-6">Camera is needed to scan visitor QR codes at the gate.</Text>
-        <TouchableOpacity onPress={requestCameraPermission} className="bg-primary-500 px-8 py-3 rounded-2xl">
-          <Text className="text-white font-semibold">Grant Permission</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    )
-  }
-
   return (
     <SafeAreaView className="flex-1 bg-surface">
       {/* Header */}
@@ -331,21 +314,34 @@ export default function GateScreen() {
           </View>
 
           <View className="flex-1 mx-6 rounded-3xl overflow-hidden relative">
-            <CameraView
-              style={{ flex: 1 }}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={scanResult ? undefined : handleBarCodeScanned}
-            />
-            {!scanResult && (
-              <View className="absolute inset-0 items-center justify-center">
-                <View className="w-56 h-56 border-2 border-white/60 rounded-2xl" />
-                <Text className="text-white/70 text-sm mt-4 text-center">
-                  {isProcessing ? 'Processing...' : 'Point camera at visitor QR code'}
-                </Text>
+            {!cameraPermission || !cameraPermission.granted ? (
+              <View className="flex-1 items-center justify-center bg-surface-card gap-4 px-8">
+                <Ionicons name="camera-outline" size={56} color="#334155" />
+                <Text className="text-white text-lg font-bold text-center">Permiso de cámara requerido</Text>
+                <Text className="text-surface-muted text-center text-sm">Necesario para escanear QR de visitantes.</Text>
+                <TouchableOpacity onPress={requestCameraPermission} className="bg-primary-500 px-8 py-3 rounded-2xl">
+                  <Text className="text-white font-semibold">Conceder permiso</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
+              <>
+                <CameraView
+                  style={{ flex: 1 }}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={scanResult ? undefined : handleBarCodeScanned}
+                />
+                {!scanResult && (
+                  <View className="absolute inset-0 items-center justify-center">
+                    <View className="w-56 h-56 border-2 border-white/60 rounded-2xl" />
+                    <Text className="text-white/70 text-sm mt-4 text-center">
+                      {isProcessing ? 'Processing...' : 'Point camera at visitor QR code'}
+                    </Text>
+                  </View>
+                )}
+                {scanResult && <ResultOverlay result={scanResult} onDismiss={dismissResult} />}
+              </>
             )}
-            {scanResult && <ResultOverlay result={scanResult} onDismiss={dismissResult} />}
           </View>
           <View className="h-6" />
         </>
