@@ -400,7 +400,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
           user: { idVerificationStatus: { in: ['NOT_SUBMITTED', 'REJECTED'] } },
         },
         include: { user: { select: { id: true, firstName: true, lastName: true } } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { joinedAt: 'asc' },
       })
       if (!cu) {
         return reply.code(404).send({ error: 'No hay residentes disponibles para simular una verificación. Todos ya tienen un envío pendiente o aprobado.' })
