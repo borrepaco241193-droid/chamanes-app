@@ -518,7 +518,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Reset user password (SUPER_ADMIN only) ─────────────────
   fastify.post<{ Body: { email: string; newPassword: string } }>(
     '/reset-user-password',
-    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN, UserRole.COMMUNITY_ADMIN)] },
     async (req, reply) => {
       const { email, newPassword } = z.object({
         email: z.string().email(),
