@@ -2,9 +2,10 @@
 import { useState } from 'react'
 import { useAccessEvents } from '@/hooks/useStaff'
 import { formatDateTime } from '@/lib/utils'
-import { DoorOpen, ArrowUp, ArrowDown, RefreshCw, Download } from 'lucide-react'
+import { DoorOpen, ArrowUp, ArrowDown, RefreshCw, Download, LogIn, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
+import api from '@/lib/api'
 
 const METHOD_LABEL: Record<string, string> = {
   QR_CODE: 'QR', MANUAL_GUARD: 'Guardia', PLATE_RECOGNITION: 'Placa', APP: 'App',
@@ -40,6 +41,8 @@ function downloadCSV(events: any[], communityMap: Record<string, string>) {
 
 export default function GatePage() {
   const [limit, setLimit] = useState(50)
+  const [gateMsg, setGateMsg] = useState('')
+  const [gateLoading, setGateLoading] = useState<'entry' | 'exit' | null>(null)
   const { data, isLoading } = useAccessEvents(limit)
   const qc = useQueryClient()
   const { activeCommunityId, activeCommunityIds, user } = useAuthStore()
@@ -47,6 +50,21 @@ export default function GatePage() {
   const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
   const hasMultiple = ids.length > 1
   const events = Array.isArray(data) ? data : []
+  const communityId = activeCommunityId ?? activeCommunityIds[0]
+
+  const sendGateCommand = async (type: 'entry' | 'exit') => {
+    setGateLoading(type)
+    setGateMsg('')
+    try {
+      await api.post(`/communities/${communityId}/gate/${type}`)
+      setGateMsg(type === 'entry' ? '✅ Comando ENTRADA enviado — el Arduino debería activarse en 2 segundos' : '✅ Comando SALIDA enviado — el Arduino debería activarse en 2 segundos')
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['access-events', ids, limit] }), 3000)
+    } catch (err: any) {
+      setGateMsg('❌ Error: ' + (err?.response?.data?.message ?? err?.response?.data?.error ?? 'No se pudo enviar el comando'))
+    } finally {
+      setGateLoading(null)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -71,6 +89,34 @@ export default function GatePage() {
             <RefreshCw className="w-4 h-4" /> Actualizar
           </button>
         </div>
+      </div>
+
+      {/* Gate control buttons */}
+      <div className="card p-4 flex flex-col gap-3">
+        <p className="text-sm font-medium text-gray-700">Control de puerta</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => sendGateCommand('entry')}
+            disabled={!!gateLoading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
+          >
+            <LogIn className="w-4 h-4" />
+            {gateLoading === 'entry' ? 'Enviando...' : 'Abrir Entrada'}
+          </button>
+          <button
+            onClick={() => sendGateCommand('exit')}
+            disabled={!!gateLoading}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            {gateLoading === 'exit' ? 'Enviando...' : 'Abrir Salida'}
+          </button>
+        </div>
+        {gateMsg && (
+          <p className={`text-sm font-medium ${gateMsg.startsWith('✅') ? 'text-green-700' : 'text-red-600'}`}>
+            {gateMsg}
+          </p>
+        )}
       </div>
 
       <div className="card overflow-hidden">

@@ -13,7 +13,7 @@ import { UserRole } from '@prisma/client'
 //   POST /communities/:communityId/gate/ack     — mark command executed
 // ============================================================
 
-const GATE_TTL_SECONDS = 30 // command expires after 30s if not picked up
+const GATE_TTL_SECONDS = 120 // command expires after 120s if not picked up
 
 const gateRoutes: FastifyPluginAsync = async (fastify) => {
 
