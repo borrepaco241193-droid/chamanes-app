@@ -55,7 +55,7 @@ const envSchema = z.object({
   // Security
   ENCRYPTION_KEY: z.string().min(32).optional(),
   ALLOWED_ORIGINS: z.string().optional(), // Comma-separated list of allowed CORS origins
-  RATE_LIMIT_MAX: z.coerce.number().default(100),
+  RATE_LIMIT_MAX: z.coerce.number().default(500),
   RATE_LIMIT_TIME_WINDOW: z.coerce.number().default(60000),
 })
 
