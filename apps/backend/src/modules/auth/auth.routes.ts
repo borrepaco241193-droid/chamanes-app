@@ -32,7 +32,7 @@ function validate<T>(schema: { parse: (v: unknown) => T }, data: unknown, reply:
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   const service = new AuthService(fastify.prisma, fastify.redis)
 
-  fastify.post('/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  fastify.post('/login', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = loginSchema.parse(req.body)
     const result = await service.login(body, req.ip, req.headers['user-agent'])
     return reply.code(200).send({ data: result })
