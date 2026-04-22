@@ -410,7 +410,7 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id: cu.userId },
         data: { idPhotoUrl: placeholderUrl, idVerified: false, idVerificationStatus: 'PENDING' },
       })
-      return reply.send({ ok: true, user: cu.user })
+      return reply.send({ ok: true, userId: cu.userId })
     },
   )
 

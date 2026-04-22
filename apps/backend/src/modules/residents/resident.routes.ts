@@ -518,8 +518,8 @@ const residentRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // ── Auto-create Staff record for operational roles ────
-      const OPERATIONAL_ROLES = [UserRole.GUARD, UserRole.STAFF, UserRole.MANAGER]
-      if (OPERATIONAL_ROLES.includes(body.role as UserRole)) {
+      const OPERATIONAL_ROLES: UserRole[] = [UserRole.GUARD, UserRole.STAFF, UserRole.MANAGER]
+      if (OPERATIONAL_ROLES.includes(body.role)) {
         const positionMap: Record<string, string> = {
           GUARD:   'Guardia de seguridad',
           STAFF:   'Personal de servicio',
