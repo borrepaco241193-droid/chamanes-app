@@ -13,7 +13,7 @@ import { useState, useRef, useCallback } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
-import * as Location from 'expo-location'
+import { PermissionsAndroid, Platform } from 'react-native'
 import { useScanQR, useAccessEvents } from '../../../src/hooks/useVisitors'
 import { gateService } from '../../../src/services/gate.service'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -119,30 +119,52 @@ export default function GateScreen() {
   const gateLng = gateSettings?.gateLng as number | undefined
   const hasGateLocation = typeof gateLat === 'number' && typeof gateLng === 'number'
 
+  // ── Request location permission (Android) ────────────────────
+  const requestLocationPermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      )
+      return granted === PermissionsAndroid.RESULTS.GRANTED
+    }
+    return true // iOS handled at app level
+  }, [])
+
+  // ── Get current position (Promise wrapper) ────────────────────
+  const getCurrentPosition = useCallback((): Promise<GeolocationPosition> => {
+    return new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000,
+      }),
+    )
+  }, [])
+
   // ── Pin current location as gate (super admin only) ──────────
   const pinGateLocation = useCallback(async () => {
     setPinningLocation(true)
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
+      const ok = await requestLocationPermission()
+      if (!ok) {
         Alert.alert('Permiso denegado', 'Necesitas permitir el acceso a ubicación.')
         return
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High })
+      const pos = await getCurrentPosition()
       await updateCommunity.mutateAsync({
         settings: {
           ...gateSettings,
-          gateLat: loc.coords.latitude,
-          gateLng: loc.coords.longitude,
+          gateLat: pos.coords.latitude,
+          gateLng: pos.coords.longitude,
         },
       } as any)
-      Alert.alert('✅ Listo', `Ubicación del portón guardada.\n${loc.coords.latitude.toFixed(6)}, ${loc.coords.longitude.toFixed(6)}`)
+      Alert.alert('✅ Listo', `Ubicación del portón guardada.\n${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`)
     } catch {
       Alert.alert('Error', 'No se pudo obtener la ubicación.')
     } finally {
       setPinningLocation(false)
     }
-  }, [gateSettings, updateCommunity])
+  }, [gateSettings, updateCommunity, requestLocationPermission, getCurrentPosition])
 
   // ── Check distance before sending gate command ────────────────
   const sendGateCommand = useCallback(async (type: 'entry' | 'exit') => {
@@ -156,15 +178,15 @@ export default function GateScreen() {
         return
       }
 
-      const { status } = await Location.requestForegroundPermissionsAsync()
-      if (status !== 'granted') {
+      const ok = await requestLocationPermission()
+      if (!ok) {
         setGateMsg({ text: '❌ Necesitas permitir acceso a ubicación', ok: false })
         setTimeout(() => setGateMsg(null), 4000)
         return
       }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-      const distance = getDistanceMeters(loc.coords.latitude, loc.coords.longitude, gateLat!, gateLng!)
+      const pos = await getCurrentPosition()
+      const distance = getDistanceMeters(pos.coords.latitude, pos.coords.longitude, gateLat!, gateLng!)
 
       if (distance > GATE_RADIUS_METERS) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
@@ -191,7 +213,7 @@ export default function GateScreen() {
       setGateLoading(null)
       setTimeout(() => setGateMsg(null), 4000)
     }
-  }, [selectedCommunityId, isUnrestricted, hasGateLocation, gateLat, gateLng])
+  }, [selectedCommunityId, isUnrestricted, hasGateLocation, gateLat, gateLng, requestLocationPermission, getCurrentPosition])
 
   const handleBarCodeScanned = useCallback(
     async ({ data }: { data: string }) => {
