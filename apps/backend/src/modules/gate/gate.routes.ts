@@ -46,6 +46,7 @@ const gateRoutes: FastifyPluginAsync = async (fastify) => {
           UserRole.RESIDENT,
           UserRole.COMMUNITY_ADMIN,
           UserRole.SUPER_ADMIN,
+          UserRole.GUARD,
         ),
       ],
     },
