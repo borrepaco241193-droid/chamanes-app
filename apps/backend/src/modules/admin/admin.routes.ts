@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 import { getDashboardStats, getPaymentReport, getAccessReport } from './admin.service.js'
 import { sendPushNotification } from '../notifications/notification.service.js'
 
@@ -525,7 +526,6 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
         newPassword: z.string().min(6),
       }).parse(req.body)
 
-      const bcrypt = await import('bcryptjs')
       const passwordHash = await bcrypt.hash(newPassword, 12)
 
       const user = await fastify.prisma.user.findUnique({ where: { email } })
