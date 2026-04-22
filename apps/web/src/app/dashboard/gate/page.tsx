@@ -56,7 +56,8 @@ export default function GatePage() {
     setGateLoading(type)
     setGateMsg('')
     try {
-      await api.post(`/communities/${communityId}/gate/${type}`)
+      const endpoint = type === 'entry' ? 'open' : 'exit'
+      await api.post(`/communities/${communityId}/gate/${endpoint}`)
       setGateMsg(type === 'entry' ? '✅ Comando ENTRADA enviado — el Arduino debería activarse en 2 segundos' : '✅ Comando SALIDA enviado — el Arduino debería activarse en 2 segundos')
       setTimeout(() => qc.invalidateQueries({ queryKey: ['access-events', ids, limit] }), 3000)
     } catch (err: any) {
