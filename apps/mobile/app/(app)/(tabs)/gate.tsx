@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
 import { useScanQR, useAccessEvents } from '../../../src/hooks/useVisitors'
+import { gateService } from '../../../src/services/gate.service'
+import { useAuthStore } from '../../../src/stores/auth.store'
 import { format } from 'date-fns'
 
 type ScanMode = 'scanner' | 'log'
@@ -103,12 +105,36 @@ export default function GateScreen() {
   const [entryType, setEntryType] = useState<'ENTRY' | 'EXIT'>('ENTRY')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [gateLoading, setGateLoading] = useState<'entry' | 'exit' | null>(null)
+  const [gateMsg, setGateMsg] = useState<{ text: string; ok: boolean } | null>(null)
   const lastScannedRef = useRef<string | null>(null)
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions()
   const { mutateAsync: scanQR } = useScanQR()
   const { data: eventsData, refetch: refetchEvents, isRefetching } = useAccessEvents()
+  const { activeCommunityId } = useAuthStore()
+
+  const sendGateCommand = useCallback(async (type: 'entry' | 'exit') => {
+    if (!activeCommunityId) return
+    setGateLoading(type)
+    setGateMsg(null)
+    try {
+      if (type === 'entry') {
+        await gateService.openEntry(activeCommunityId)
+      } else {
+        await gateService.openExit(activeCommunityId)
+      }
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+      setGateMsg({ text: type === 'entry' ? '✅ Puerta de entrada abierta' : '✅ Puerta de salida abierta', ok: true })
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
+      setGateMsg({ text: err?.response?.data?.message ?? 'Error al enviar comando', ok: false })
+    } finally {
+      setGateLoading(null)
+      setTimeout(() => setGateMsg(null), 4000)
+    }
+  }, [activeCommunityId])
 
   const handleBarCodeScanned = useCallback(
     async ({ data }: { data: string }) => {
@@ -210,6 +236,38 @@ export default function GateScreen() {
             />
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* ── Gate open buttons ─────────────────────────── */}
+      <View className="mx-6 mb-4 bg-surface-card border border-surface-border rounded-2xl p-4 gap-3">
+        <Text className="text-surface-muted text-xs font-semibold uppercase tracking-wider">Abrir puerta</Text>
+        <View className="flex-row gap-3">
+          <TouchableOpacity
+            onPress={() => sendGateCommand('entry')}
+            disabled={!!gateLoading}
+            className="flex-1 flex-row items-center justify-center gap-2 bg-emerald-600 active:bg-emerald-700 py-3 rounded-xl"
+          >
+            {gateLoading === 'entry'
+              ? <ActivityIndicator size="small" color="white" />
+              : <Ionicons name="enter-outline" size={18} color="white" />}
+            <Text className="text-white font-bold text-sm">Entrada</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => sendGateCommand('exit')}
+            disabled={!!gateLoading}
+            className="flex-1 flex-row items-center justify-center gap-2 bg-blue-600 active:bg-blue-700 py-3 rounded-xl"
+          >
+            {gateLoading === 'exit'
+              ? <ActivityIndicator size="small" color="white" />
+              : <Ionicons name="exit-outline" size={18} color="white" />}
+            <Text className="text-white font-bold text-sm">Salida</Text>
+          </TouchableOpacity>
+        </View>
+        {gateMsg && (
+          <Text className={`text-xs text-center font-medium ${gateMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+            {gateMsg.text}
+          </Text>
+        )}
       </View>
 
       {mode === 'scanner' ? (
