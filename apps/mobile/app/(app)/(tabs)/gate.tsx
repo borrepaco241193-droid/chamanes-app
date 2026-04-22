@@ -120,6 +120,7 @@ export default function GateScreen() {
     if (!activeCommunityId) return
     setGateLoading(type)
     setGateMsg(null)
+    console.log('[GATE] Enviando comando', type, 'a communityId:', activeCommunityId)
     try {
       if (type === 'entry') {
         await gateService.openEntry(activeCommunityId)
