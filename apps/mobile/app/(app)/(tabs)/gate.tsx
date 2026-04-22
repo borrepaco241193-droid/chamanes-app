@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
 import { PermissionsAndroid, Platform } from 'react-native'
+import { router } from 'expo-router'
 import { useScanQR, useAccessEvents } from '../../../src/hooks/useVisitors'
 import { gateService } from '../../../src/services/gate.service'
 import { useAuthStore } from '../../../src/stores/auth.store'
@@ -319,6 +320,26 @@ export default function GateScreen() {
         </View>
         {gateMsg && (
           <Text className={`text-xs text-center font-medium ${gateMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{gateMsg.text}</Text>
+        )}
+
+        {/* Manual entry buttons — visible to guards and admins */}
+        {(user?.globalRole === 'GUARD' || user?.role === 'GUARD' || isUnrestricted) && (
+          <View className="flex-row gap-3 pt-1">
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/manual-entry')}
+              className="flex-1 flex-row items-center justify-center gap-2 bg-amber-600/20 border border-amber-600/40 py-2.5 rounded-xl"
+            >
+              <Ionicons name="person-add-outline" size={16} color="#fbbf24" />
+              <Text className="text-amber-400 font-semibold text-sm">Registro manual</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/manual-visits')}
+              className="flex-1 flex-row items-center justify-center gap-2 bg-slate-700/50 border border-slate-600 py-2.5 rounded-xl"
+            >
+              <Ionicons name="people-outline" size={16} color="#94a3b8" />
+              <Text className="text-surface-muted font-semibold text-sm">Ver visitas</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 

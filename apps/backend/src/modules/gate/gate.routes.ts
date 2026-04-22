@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
+import { z } from 'zod'
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
 // ============================================================
 // Gate Routes
@@ -191,6 +193,159 @@ const gateRoutes: FastifyPluginAsync = async (fastify) => {
         : `gate:cmd:entry:${communityId}`
 
       await fastify.redis.del(key)
+      return reply.send({ ok: true })
+    },
+  )
+
+  // ── Upload a gate photo (INE or plates) ────────────────────
+  // POST /:communityId/gate/upload-photo
+  // Returns { url } for use in manual-entry form
+  fastify.post<{ Params: { communityId: string } }>(
+    '/:communityId/gate/upload-photo',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.GUARD, UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const data = await req.file()
+      if (!data) return reply.code(400).send({ error: 'No file received' })
+
+      const chunks: Buffer[] = []
+      for await (const chunk of data.file) chunks.push(chunk)
+      const buffer = Buffer.concat(chunks)
+
+      const { env } = await import('../../config/env.js')
+      let url: string
+
+      if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET_NAME && env.R2_ACCOUNT_ID) {
+        const s3 = new S3Client({
+          region: 'auto',
+          endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
+        })
+        const ext = data.mimetype.split('/')[1] ?? 'jpg'
+        const key = `gate-photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        await s3.send(new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key, Body: buffer, ContentType: data.mimetype }))
+        url = env.R2_PUBLIC_URL ? `${env.R2_PUBLIC_URL}/${key}` : `https://${env.R2_BUCKET_NAME}.r2.cloudflarestorage.com/${key}`
+      } else {
+        url = `data:${data.mimetype};base64,${buffer.toString('base64')}`
+      }
+
+      return reply.send({ ok: true, url })
+    },
+  )
+
+  // ── Register manual visitor (guard) ───────────────────────
+  // POST /:communityId/gate/manual-entry
+  const manualEntrySchema = z.object({
+    visitorName: z.string().min(1),
+    passengers:  z.number().int().positive().optional().nullable(),
+    unitNumber:  z.string().min(1),
+    hostName:    z.string().min(1),
+    ineName:     z.string().optional().nullable(),
+    inePhotoUrl: z.string().url().optional().nullable(),
+    plateText:   z.string().optional().nullable(),
+    platePhotoUrl: z.string().url().optional().nullable(),
+    carModel:    z.string().optional().nullable(),
+    carColor:    z.string().optional().nullable(),
+  })
+
+  fastify.post<{ Params: { communityId: string }; Body: unknown }>(
+    '/:communityId/gate/manual-entry',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.GUARD, UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const userId = req.user.sub
+      const body = manualEntrySchema.parse(req.body)
+
+      // Create manual visit record
+      const visit = await fastify.prisma.manualVisit.create({
+        data: {
+          communityId,
+          registeredById: userId,
+          ...body,
+          isInside: true,
+        },
+      })
+
+      // Log access event
+      await fastify.prisma.accessEvent.create({
+        data: {
+          communityId,
+          type: 'ENTRY',
+          method: 'MANUAL_GUARD',
+          personName: body.visitorName,
+          personType: 'visitor',
+          plateNumber: body.plateText ?? null,
+          isAllowed: true,
+          notes: `Manual: Visita a ${body.unitNumber} con ${body.hostName}`,
+        },
+      })
+
+      // Queue entry gate command
+      const cmd = JSON.stringify({ type: 'ENTRY', requestedBy: userId, requestedAt: new Date().toISOString() })
+      await fastify.redis.setex(`gate:cmd:entry:${communityId}`, GATE_TTL_SECONDS, cmd)
+
+      return reply.code(201).send({ ok: true, visit })
+    },
+  )
+
+  // ── List active manual visits ──────────────────────────────
+  // GET /:communityId/gate/manual-visits
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/gate/manual-visits',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.GUARD, UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const visits = await fastify.prisma.manualVisit.findMany({
+        where: { communityId },
+        orderBy: { entryAt: 'desc' },
+        take: 100,
+        include: {
+          registeredBy: { select: { firstName: true, lastName: true } },
+        },
+      })
+      return reply.send({ visits })
+    },
+  )
+
+  // ── Register manual exit ───────────────────────────────────
+  // POST /:communityId/gate/manual-exit/:visitId
+  fastify.post<{ Params: { communityId: string; visitId: string } }>(
+    '/:communityId/gate/manual-exit/:visitId',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.GUARD, UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER)] },
+    async (req, reply) => {
+      const { communityId, visitId } = req.params
+      const userId = req.user.sub
+
+      const visit = await fastify.prisma.manualVisit.findUnique({ where: { id: visitId } })
+      if (!visit || visit.communityId !== communityId) {
+        return reply.code(404).send({ error: 'Visit not found' })
+      }
+      if (!visit.isInside) {
+        return reply.code(400).send({ error: 'Visitor already exited' })
+      }
+
+      await fastify.prisma.manualVisit.update({
+        where: { id: visitId },
+        data: { isInside: false, exitAt: new Date() },
+      })
+
+      // Log exit event
+      await fastify.prisma.accessEvent.create({
+        data: {
+          communityId,
+          type: 'EXIT',
+          method: 'MANUAL_GUARD',
+          personName: visit.visitorName,
+          personType: 'visitor',
+          plateNumber: visit.plateText ?? null,
+          isAllowed: true,
+          notes: `Salida manual: visita a ${visit.unitNumber}`,
+        },
+      })
+
+      // Queue exit gate command
+      const cmd = JSON.stringify({ type: 'EXIT', requestedBy: userId, requestedAt: new Date().toISOString() })
+      await fastify.redis.setex(`gate:cmd:exit:${communityId}`, GATE_TTL_SECONDS, cmd)
+
       return reply.send({ ok: true })
     },
   )

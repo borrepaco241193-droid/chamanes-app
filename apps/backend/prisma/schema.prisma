@@ -137,6 +137,7 @@ model Community {
   staff          Staff[]
   workOrders     WorkOrder[]
   visitorPasses  VisitorPass[]
+  manualVisits   ManualVisit[]
   announcements  Announcement[]
   forumPosts     ForumPost[]
   tasks          Task[]
@@ -183,6 +184,7 @@ model User {
   forumLikes      ForumLike[]
   assignedTasks   Task[]          @relation("AssignedTasks")
   createdTasks    Task[]          @relation("CreatedTasks")
+  manualVisits    ManualVisit[]   @relation("ManualVisitRegisteredBy")
 
   @@map("users")
 }
@@ -362,6 +364,37 @@ model AccessEvent {
 
   @@index([communityId, createdAt])
   @@map("access_events")
+}
+
+// ── Manual Visits (registered by guard at gate) ───────────────
+
+model ManualVisit {
+  id             String    @id @default(cuid())
+  communityId    String
+  registeredById String
+
+  visitorName    String
+  passengers     Int?
+  unitNumber     String
+  hostName       String
+
+  ineName        String?
+  inePhotoUrl    String?
+  plateText      String?
+  platePhotoUrl  String?
+  carModel       String?
+  carColor       String?
+
+  isInside       Boolean   @default(true)
+  entryAt        DateTime  @default(now())
+  exitAt         DateTime?
+
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  registeredBy User      @relation("ManualVisitRegisteredBy", fields: [registeredById], references: [id])
+
+  @@index([communityId, isInside])
+  @@index([communityId, entryAt])
+  @@map("manual_visits")
 }
 
 // ── Common Areas ──────────────────────────────────────────────
