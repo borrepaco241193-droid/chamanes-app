@@ -197,6 +197,48 @@ const gateRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  // ── Units + residents lookup for guard autocomplete ───────
+  // GET /:communityId/gate/units-lookup
+  fastify.get<{ Params: { communityId: string } }>(
+    '/:communityId/gate/units-lookup',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.GUARD, UserRole.COMMUNITY_ADMIN, UserRole.SUPER_ADMIN, UserRole.MANAGER)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const units = await fastify.prisma.unit.findMany({
+        where: { communityId },
+        orderBy: [{ block: 'asc' }, { number: 'asc' }],
+        select: {
+          id: true,
+          number: true,
+          block: true,
+          residents: {
+            where: { moveOutDate: null },
+            select: {
+              communityUser: {
+                select: { user: { select: { firstName: true, lastName: true } } },
+              },
+            },
+          },
+          householdMembers: {
+            where: { isActive: true },
+            select: { name: true },
+          },
+        },
+      })
+
+      const result = units.map((u) => {
+        const label = u.block ? `${u.block}-${u.number}` : u.number
+        const authorizedNames = [
+          ...u.residents.map((r) => `${r.communityUser.user.firstName} ${r.communityUser.user.lastName}`),
+          ...u.householdMembers.map((h) => h.name),
+        ]
+        return { id: u.id, number: u.number, block: u.block, label, authorizedNames }
+      })
+
+      return reply.send({ units: result })
+    },
+  )
+
   // ── Upload a gate photo (INE or plates) ────────────────────
   // POST /:communityId/gate/upload-photo
   // Returns { url } for use in manual-entry form

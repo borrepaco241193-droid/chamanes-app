@@ -38,6 +38,7 @@ export async function buildApp() {
           : undefined,
     },
     trustProxy: true,
+    bodyLimit: 10 * 1024 * 1024, // 10 MB — needed for base64 photo fallback
   })
 
   // ── Security headers ──────────────────────────────────────
