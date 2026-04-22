@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { UserRole } from '@prisma/client'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 
 // ============================================================
 // Community Routes — CRUD for communities
@@ -210,6 +211,83 @@ const communityRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.code(201).send({ ok: true, userId: user.id, firstName: user.firstName, lastName: user.lastName })
+    },
+  )
+
+  // ── Invite new user as community admin (creates account if needed) ──
+  const inviteMemberSchema = z.object({
+    firstName: z.string().min(1),
+    lastName:  z.string().min(1),
+    email:     z.string().email(),
+    phone:     z.string().optional().nullable(),
+    role:      z.enum(['COMMUNITY_ADMIN', 'MANAGER']).default('COMMUNITY_ADMIN'),
+  })
+
+  fastify.post<{ Params: { communityId: string }; Body: unknown }>(
+    '/:communityId/members/invite',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { communityId } = req.params
+      const body = inviteMemberSchema.parse(req.body)
+
+      const community = await fastify.prisma.community.findUnique({ where: { id: communityId } })
+      if (!community) return reply.code(404).send({ error: 'Comunidad no encontrada' })
+
+      let isExistingUser = false
+      let tempPassword: string | null = null
+      let user = await fastify.prisma.user.findUnique({ where: { email: body.email } })
+
+      if (user) {
+        isExistingUser = true
+      } else {
+        // Generate temp password and create account
+        tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase()
+        const passwordHash = await bcrypt.hash(tempPassword, 12)
+        user = await fastify.prisma.user.create({
+          data: {
+            firstName:  body.firstName,
+            lastName:   body.lastName,
+            email:      body.email,
+            phone:      body.phone ?? null,
+            passwordHash,
+            globalRole: body.role as UserRole,
+            isActive:   true,
+          },
+        })
+      }
+
+      // Assign to community
+      const existing = await fastify.prisma.communityUser.findUnique({
+        where: { userId_communityId: { userId: user.id, communityId } },
+      })
+      if (existing) {
+        await fastify.prisma.communityUser.update({
+          where: { id: existing.id },
+          data: { role: body.role as UserRole, isActive: true },
+        })
+      } else {
+        await fastify.prisma.communityUser.create({
+          data: { userId: user.id, communityId, role: body.role as UserRole, isActive: true },
+        })
+      }
+
+      // Ensure globalRole reflects the assigned community role
+      if (!isExistingUser || user.globalRole === UserRole.RESIDENT) {
+        await fastify.prisma.user.update({
+          where: { id: user.id },
+          data: { globalRole: body.role as UserRole },
+        })
+      }
+
+      return reply.code(201).send({
+        ok: true,
+        userId: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isExistingUser,
+        tempPassword, // null if user already had an account
+      })
     },
   )
 
