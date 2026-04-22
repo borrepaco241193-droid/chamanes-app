@@ -514,6 +514,32 @@ const adminRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({ ok: true, status: newStatus })
     },
   )
+
+  // ── Reset user password (SUPER_ADMIN only) ─────────────────
+  fastify.post<{ Body: { email: string; newPassword: string } }>(
+    '/reset-user-password',
+    { preHandler: [fastify.authenticate, fastify.requireRole(UserRole.SUPER_ADMIN)] },
+    async (req, reply) => {
+      const { email, newPassword } = z.object({
+        email: z.string().email(),
+        newPassword: z.string().min(6),
+      }).parse(req.body)
+
+      const bcrypt = await import('bcryptjs')
+      const passwordHash = await bcrypt.hash(newPassword, 12)
+
+      const user = await fastify.prisma.user.findUnique({ where: { email } })
+      if (!user) return reply.code(404).send({ error: 'User not found' })
+
+      await fastify.prisma.user.update({ where: { email }, data: { passwordHash, isActive: true } })
+
+      // Clear any lockout in Redis
+      await fastify.redis.del(`auth:lockout:${email}`)
+      await fastify.redis.del(`auth:attempts:${email}`)
+
+      return reply.send({ ok: true, email })
+    },
+  )
 }
 
 export default adminRoutes
