@@ -50,15 +50,20 @@ export default function GatePage() {
   const communityMap = Object.fromEntries((user?.communities ?? []).map((c: any) => [c.id, c.name]))
   const hasMultiple = ids.length > 1
   const events = Array.isArray(data) ? data : []
-  const communityId = activeCommunityId ?? activeCommunityIds[0]
+  const defaultCommunityId = activeCommunityId ?? activeCommunityIds[0]
+  const [selectedGateCommunity, setSelectedGateCommunity] = useState(defaultCommunityId)
 
   const sendGateCommand = async (type: 'entry' | 'exit') => {
+    if (!selectedGateCommunity) return
     setGateLoading(type)
     setGateMsg('')
     try {
       const endpoint = type === 'entry' ? 'open' : 'exit'
-      await api.post(`/communities/${communityId}/gate/${endpoint}`)
-      setGateMsg(type === 'entry' ? '✅ Comando ENTRADA enviado — el Arduino debería activarse en 2 segundos' : '✅ Comando SALIDA enviado — el Arduino debería activarse en 2 segundos')
+      await api.post(`/communities/${selectedGateCommunity}/gate/${endpoint}`)
+      const communityName = communityMap[selectedGateCommunity] ?? selectedGateCommunity
+      setGateMsg(type === 'entry'
+        ? `✅ Comando ENTRADA enviado a ${communityName}`
+        : `✅ Comando SALIDA enviado a ${communityName}`)
       setTimeout(() => qc.invalidateQueries({ queryKey: ['access-events', ids, limit] }), 3000)
     } catch (err: any) {
       setGateMsg('❌ Error: ' + (err?.response?.data?.message ?? err?.response?.data?.error ?? 'No se pudo enviar el comando'))
@@ -95,6 +100,17 @@ export default function GatePage() {
       {/* Gate control buttons */}
       <div className="card p-4 flex flex-col gap-3">
         <p className="text-sm font-medium text-gray-700">Control de puerta</p>
+        {hasMultiple && (
+          <select
+            value={selectedGateCommunity}
+            onChange={(e) => setSelectedGateCommunity(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {ids.map((id) => (
+              <option key={id} value={id}>{communityMap[id] ?? id}</option>
+            ))}
+          </select>
+        )}
         <div className="flex gap-3">
           <button
             onClick={() => sendGateCommand('entry')}

@@ -14,7 +14,6 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
 import { useScanQR, useAccessEvents } from '../../../src/hooks/useVisitors'
 import { gateService } from '../../../src/services/gate.service'
-import { api } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { format } from 'date-fns'
 
@@ -115,18 +114,20 @@ export default function GateScreen() {
   const { mutateAsync: scanQR } = useScanQR()
   const { data: eventsData, refetch: refetchEvents, isRefetching } = useAccessEvents()
   const { activeCommunityIds, user } = useAuthStore()
-  const activeCommunityId = 'cmnxlhi07000k13gv6sova1w9' || activeCommunityIds[0] || user?.communityId
+  const communities = user?.communities ?? []
+  const defaultCommunityId = activeCommunityIds[0] ?? user?.communityId ?? ''
+  const [selectedCommunityId, setSelectedCommunityId] = useState(defaultCommunityId)
+  const hasMultipleCommunities = activeCommunityIds.length > 1
 
   const sendGateCommand = useCallback(async (type: 'entry' | 'exit') => {
-    if (!activeCommunityId) return
+    if (!selectedCommunityId) return
     setGateLoading(type)
     setGateMsg(null)
-    console.log('[GATE] Enviando comando', type, 'a communityId:', activeCommunityId, '| baseURL:', api.defaults.baseURL)
     try {
       if (type === 'entry') {
-        await gateService.openEntry(activeCommunityId)
+        await gateService.openEntry(selectedCommunityId)
       } else {
-        await gateService.openExit(activeCommunityId)
+        await gateService.openExit(selectedCommunityId)
       }
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
       setGateMsg({ text: type === 'entry' ? '✅ Puerta de entrada abierta' : '✅ Puerta de salida abierta', ok: true })
@@ -137,7 +138,7 @@ export default function GateScreen() {
       setGateLoading(null)
       setTimeout(() => setGateMsg(null), 4000)
     }
-  }, [activeCommunityId])
+  }, [selectedCommunityId])
 
   const handleBarCodeScanned = useCallback(
     async ({ data }: { data: string }) => {
@@ -244,6 +245,29 @@ export default function GateScreen() {
       {/* ── Gate open buttons ─────────────────────────── */}
       <View className="mx-6 mb-4 bg-surface-card border border-surface-border rounded-2xl p-4 gap-3">
         <Text className="text-surface-muted text-xs font-semibold uppercase tracking-wider">Abrir puerta</Text>
+        {hasMultipleCommunities && (
+          <View className="flex-row flex-wrap gap-2">
+            {activeCommunityIds.map((id) => {
+              const name = communities.find((c: any) => c.id === id)?.name ?? id
+              const isSelected = selectedCommunityId === id
+              return (
+                <TouchableOpacity
+                  key={id}
+                  onPress={() => setSelectedCommunityId(id)}
+                  className={`px-3 py-1.5 rounded-full border ${
+                    isSelected
+                      ? 'bg-primary-500 border-primary-500'
+                      : 'bg-surface border-surface-border'
+                  }`}
+                >
+                  <Text className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-surface-muted'}`}>
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
         <View className="flex-row gap-3">
           <TouchableOpacity
             onPress={() => sendGateCommand('entry')}
