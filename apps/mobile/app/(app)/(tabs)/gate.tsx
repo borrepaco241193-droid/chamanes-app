@@ -114,7 +114,7 @@ export default function GateScreen() {
   const { mutateAsync: scanQR } = useScanQR()
   const { data: eventsData, refetch: refetchEvents, isRefetching } = useAccessEvents()
   const { activeCommunityIds, user } = useAuthStore()
-  const activeCommunityId = activeCommunityIds[0] ?? user?.communityId
+  const activeCommunityId = 'cmnxlhi07000k13gv6sova1w9' || activeCommunityIds[0] || user?.communityId
 
   const sendGateCommand = useCallback(async (type: 'entry' | 'exit') => {
     if (!activeCommunityId) return
