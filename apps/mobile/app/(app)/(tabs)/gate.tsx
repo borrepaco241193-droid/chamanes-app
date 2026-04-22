@@ -14,6 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Haptics from 'expo-haptics'
 import { useScanQR, useAccessEvents } from '../../../src/hooks/useVisitors'
 import { gateService } from '../../../src/services/gate.service'
+import { api } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { format } from 'date-fns'
 
@@ -120,7 +121,7 @@ export default function GateScreen() {
     if (!activeCommunityId) return
     setGateLoading(type)
     setGateMsg(null)
-    console.log('[GATE] Enviando comando', type, 'a communityId:', activeCommunityId)
+    console.log('[GATE] Enviando comando', type, 'a communityId:', activeCommunityId, '| baseURL:', api.defaults.baseURL)
     try {
       if (type === 'entry') {
         await gateService.openEntry(activeCommunityId)
