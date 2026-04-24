@@ -1,160 +1,93 @@
 // =============================================================
-// Chamanes — Controlador de Acceso
-// Hardware: ESP8266 (NodeMCU v3) o ESP32
+// Chamanes — Controlador de Acceso (Doble Relay)
+// Hardware: ESP8266 NodeMCU v3
 //
-// Función: Cada 2.5 segundos consulta el servidor de Chamanes.
-//          Si hay un comando pendiente, activa el relay 4 segundos
-//          (tiempo suficiente para que el motor de la barrera abra),
-//          luego envía ACK para limpiar el comando.
+// Relay 1 (ENTRADA): D1 = GPIO5
+// Relay 2 (SALIDA):  D2 = GPIO4
 //
-// Conexiones:
-//   NodeMCU D1 (GPIO5) → Relay IN
-//   NodeMCU 5V         → Relay VCC
+// Wiring:
+//   NodeMCU D1 (GPIO5) → Relay IN1  (entrada)
+//   NodeMCU D2 (GPIO4) → Relay IN2  (salida)
+//   NodeMCU VIN (5V)   → Relay JD-VCC  ← IMPORTANTE: 5V no 3.3V
+//   NodeMCU 3.3V       → Relay VCC
 //   NodeMCU GND        → Relay GND
-//   Relay COM          → Terminal COM del motor/barrera
-//   Relay NO           → Terminal de apertura del motor/barrera
 // =============================================================
 
-// ── Selecciona tu placa ───────────────────────────────────────
-#define USE_ESP8266    // NodeMCU / Wemos D1 Mini
-// #define USE_ESP32   // Descomenta esta línea si usas ESP32
-
-#ifdef USE_ESP8266
-  #include <ESP8266WiFi.h>
-  #include <ESP8266HTTPClient.h>
-  #include <WiFiClientSecureBearSSL.h>
-#else
-  #include <WiFi.h>
-  #include <HTTPClient.h>
-  #include <WiFiClientSecure.h>
-#endif
-
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
 #include <ArduinoJson.h>
 
 // =============================================================
 // ⚙️  CONFIGURACIÓN — Edita estos valores antes de cargar
 // =============================================================
 
-const char* WIFI_SSID     = "NOMBRE_DE_TU_WIFI";
-const char* WIFI_PASSWORD = "CONTRASENA_DE_TU_WIFI";
+const char* WIFI_SSID     = "NOMBRE_DE_TU_NUEVO_WIFI";   // ← Cambia esto
+const char* WIFI_PASSWORD = "CONTRASENA_DE_TU_WIFI";      // ← Cambia esto
 
-// URL base del backend en Railway (sin slash al final)
-const char* API_BASE = "https://chamanes-app-production.up.railway.app/api/v1";
-
-// ID de tu comunidad (cópialo de la URL o de la BD)
-const char* COMMUNITY_ID = "TU_COMMUNITY_ID";
-
-// Clave secreta — debe coincidir exactamente con GATE_API_KEY en Railway
-const char* GATE_API_KEY = "TU_GATE_API_KEY";
+const char* API_BASE      = "https://chamanes-app-production.up.railway.app/api/v1";
+const char* COMMUNITY_ID  = "TU_COMMUNITY_ID";             // ← ID de tu comunidad
+const char* GATE_API_KEY  = "TU_GATE_API_KEY";             // ← Clave secreta
 
 // =============================================================
-// ⚙️  AJUSTES DE HARDWARE
+// ⚙️  PINES — GPIO directos para evitar error 'D1 not declared'
 // =============================================================
 
-#ifdef USE_ESP8266
-  #define PIN_RELAY  D1   // GPIO5 — señal al relay
-  #define PIN_LED    D4   // LED integrado del NodeMCU (activo en LOW)
-  #define LED_ON     LOW
-  #define LED_OFF    HIGH
-#else
-  #define PIN_RELAY  26
-  #define PIN_LED    2
-  #define LED_ON     HIGH
-  #define LED_OFF    LOW
-#endif
+#define PIN_ENTRADA  5    // D1 = GPIO5
+#define PIN_SALIDA   4    // D2 = GPIO4
+#define PIN_LED      2    // D4 = LED integrado (activo en LOW)
 
-// Tiempo que el relay permanece activo (ms)
-// Ajusta según cuánto tarda en abrir tu barrera
-const unsigned long RELAY_OPEN_MS   = 4000;
+#define RELE_ON   LOW     // Módulo de relay activo-LOW
+#define RELE_OFF  HIGH
+#define LED_ON    LOW
+#define LED_OFF   HIGH
 
-// Intervalo entre consultas al servidor (ms)
-const unsigned long POLL_INTERVAL   = 2500;
+// =============================================================
+// ⚙️  TIEMPOS
+// =============================================================
 
-// Timeout para cada petición HTTP (ms)
-const unsigned long HTTP_TIMEOUT    = 8000;
+const unsigned long RELAY_OPEN_MS = 4000;   // Tiempo que queda abierto el relay
+const unsigned long POLL_INTERVAL = 2500;   // Polling al servidor
+const unsigned long HTTP_TIMEOUT  = 8000;   // Timeout HTTP
 
 // =============================================================
 // Variables internas
 // =============================================================
 
-unsigned long lastPollAt    = 0;
-unsigned long relayOpenedAt = 0;
-bool          relayActive   = false;
+struct Relay {
+  int  pin;
+  bool active;
+  unsigned long openedAt;
+  const char*   name;
+};
+
+Relay entrada = { PIN_ENTRADA, false, 0, "ENTRADA" };
+Relay salida  = { PIN_SALIDA,  false, 0, "SALIDA"  };
+
+unsigned long lastPollAt = 0;
+
+// Cliente HTTPS global — evita fragmentación del heap en ESP8266
+BearSSL::WiFiClientSecure secureClient;
 
 // =============================================================
-// Funciones auxiliares
+// Helpers
 // =============================================================
 
 String endpoint(const char* path) {
   return String(API_BASE) + "/communities/" + String(COMMUNITY_ID) + path;
 }
 
-void setRelay(bool open) {
-  digitalWrite(PIN_RELAY, open ? HIGH : LOW);
-  digitalWrite(PIN_LED, open ? LED_ON : LED_OFF);
-  relayActive = open;
-  if (open) relayOpenedAt = millis();
-  Serial.println(open ? "[Relay] ABIERTO" : "[Relay] CERRADO");
+void setRelay(Relay& r, bool open) {
+  digitalWrite(r.pin, open ? RELE_ON : RELE_OFF);
+  r.active   = open;
+  r.openedAt = open ? millis() : 0;
+  Serial.printf("[Relay %s] %s\n", r.name, open ? "ABIERTO" : "CERRADO");
 }
 
-// Consulta si hay comando pendiente
-// Retorna true si hay un ENTRY o EXIT en cola
-bool pollPending() {
-  #ifdef USE_ESP8266
-    BearSSL::WiFiClientSecure client;
-  #else
-    WiFiClientSecure client;
-  #endif
-  client.setInsecure(); // Acepta cualquier certificado SSL (simplificado para hardware)
-
-  HTTPClient http;
-  http.begin(client, endpoint("/gate/pending"));
-  http.setTimeout(HTTP_TIMEOUT);
-  http.addHeader("X-Gate-Key", GATE_API_KEY);
-
-  int code = http.GET();
-
-  if (code != 200) {
-    Serial.printf("[Poll] Error HTTP %d\n", code);
-    http.end();
-    return false;
-  }
-
-  String body = http.getString();
-  http.end();
-
-  StaticJsonDocument<256> doc;
-  if (deserializeJson(doc, body)) return false;
-
-  bool pending = doc["pending"] | false;
-  if (pending) {
-    const char* type = doc["command"]["type"] | "?";
-    Serial.printf("[Poll] Comando recibido: %s\n", type);
-  }
-  return pending;
-}
-
-// Confirma al servidor que el comando fue ejecutado
-bool sendAck() {
-  #ifdef USE_ESP8266
-    BearSSL::WiFiClientSecure client;
-  #else
-    WiFiClientSecure client;
-  #endif
-  client.setInsecure();
-
-  HTTPClient http;
-  http.begin(client, endpoint("/gate/ack"));
-  http.setTimeout(HTTP_TIMEOUT);
-  http.addHeader("X-Gate-Key", GATE_API_KEY);
-  http.addHeader("Content-Type", "application/json");
-
-  int code = http.POST("{\"executed\":true}");
-  http.end();
-
-  bool ok = (code == 200);
-  Serial.printf("[ACK] %s (HTTP %d)\n", ok ? "OK" : "FALLO", code);
-  return ok;
+void tickRelays() {
+  unsigned long now = millis();
+  if (entrada.active && now - entrada.openedAt >= RELAY_OPEN_MS) setRelay(entrada, false);
+  if (salida.active  && now - salida.openedAt  >= RELAY_OPEN_MS) setRelay(salida,  false);
 }
 
 void blinkLed(int veces, int ms) {
@@ -165,25 +98,98 @@ void blinkLed(int veces, int ms) {
 }
 
 // =============================================================
+// Poll — consulta entry y exit por separado
+// =============================================================
+
+void checkCommunity(const char* communityId) {
+  HTTPClient http;
+  String url = String(API_BASE) + "/communities/" + String(communityId) + "/gate/pending";
+  http.begin(secureClient, url);
+  http.setTimeout(HTTP_TIMEOUT);
+  http.addHeader("X-Gate-Key", GATE_API_KEY);
+
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("[Poll] HTTP %d para comunidad %s\n", code, communityId);
+    http.end();
+    return;
+  }
+
+  String body = http.getString();
+  http.end();
+  yield();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, body)) {
+    Serial.println("[Poll] JSON inválido");
+    return;
+  }
+
+  bool entryPending = doc["entry"]["pending"] | false;
+  bool exitPending  = doc["exit"]["pending"]  | false;
+
+  // ── Procesar ENTRADA ────────────────────────────────────────
+  if (entryPending) {
+    Serial.printf("[Poll] ENTRADA pendiente en %s\n", communityId);
+
+    // ACK primero para evitar doble activación
+    HTTPClient ackHttp;
+    String ackUrl = String(API_BASE) + "/communities/" + String(communityId) + "/gate/ack";
+    ackHttp.begin(secureClient, ackUrl);
+    ackHttp.addHeader("Content-Type", "application/json");
+    ackHttp.addHeader("X-Gate-Key", GATE_API_KEY);
+    int ackCode = ackHttp.POST("{\"executed\":true,\"type\":\"ENTRY\"}");
+    ackHttp.end();
+    yield();
+    Serial.printf("[ACK ENTRY] HTTP %d\n", ackCode);
+
+    setRelay(entrada, true);
+  }
+
+  // ── Procesar SALIDA ─────────────────────────────────────────
+  if (exitPending) {
+    Serial.printf("[Poll] SALIDA pendiente en %s\n", communityId);
+
+    HTTPClient ackHttp;
+    String ackUrl = String(API_BASE) + "/communities/" + String(communityId) + "/gate/ack";
+    ackHttp.begin(secureClient, ackUrl);
+    ackHttp.addHeader("Content-Type", "application/json");
+    ackHttp.addHeader("X-Gate-Key", GATE_API_KEY);
+    int ackCode = ackHttp.POST("{\"executed\":true,\"type\":\"EXIT\"}");
+    ackHttp.end();
+    yield();
+    Serial.printf("[ACK EXIT] HTTP %d\n", ackCode);
+
+    setRelay(salida, true);
+  }
+}
+
+// =============================================================
 // Setup
 // =============================================================
 
 void setup() {
   Serial.begin(115200);
-  delay(200);
+  delay(300);
 
-  pinMode(PIN_RELAY, OUTPUT);
-  pinMode(PIN_LED, OUTPUT);
-  setRelay(false);
+  pinMode(PIN_ENTRADA, OUTPUT);
+  pinMode(PIN_SALIDA,  OUTPUT);
+  pinMode(PIN_LED,     OUTPUT);
+
+  setRelay(entrada, false);
+  setRelay(salida,  false);
+  digitalWrite(PIN_LED, LED_OFF);
+
+  secureClient.setInsecure(); // Acepta cualquier certificado SSL
 
   Serial.println("\n╔══════════════════════════════╗");
   Serial.println("║  Chamanes Gate Controller    ║");
+  Serial.println("║  Doble Relay (Entrada+Salida) ║");
   Serial.println("╚══════════════════════════════╝");
+  Serial.printf("[WiFi] Conectando a: %s\n", WIFI_SSID);
 
-  // Conectar WiFi
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.printf("[WiFi] Conectando a %s", WIFI_SSID);
 
   int intentos = 0;
   while (WiFi.status() != WL_CONNECTED && intentos < 40) {
@@ -196,13 +202,13 @@ void setup() {
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.printf("\n[WiFi] Conectado — IP: %s\n", WiFi.localIP().toString().c_str());
-    blinkLed(3, 150); // 3 parpadeos = listo
+    blinkLed(3, 150);
+    Serial.printf("[Gate] Comunidad: %s\n", COMMUNITY_ID);
     Serial.println("[Gate] Iniciando polling...\n");
   } else {
-    Serial.println("\n[WiFi] ERROR — Revisa SSID/contraseña");
-    Serial.println("[Gate] Reiniciando en 5 segundos...");
-    blinkLed(10, 100);
-    delay(2000);
+    Serial.println("\n[WiFi] ERROR — Revisa SSID/contraseña en el sketch");
+    blinkLed(10, 80);
+    delay(1000);
     ESP.restart();
   }
 }
@@ -212,8 +218,7 @@ void setup() {
 // =============================================================
 
 void loop() {
-
-  // ── Reconexión WiFi automática ────────────────────────────
+  // Reconexión automática
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[WiFi] Desconectado — reconectando...");
     WiFi.reconnect();
@@ -221,20 +226,14 @@ void loop() {
     return;
   }
 
-  // ── Cierre automático del relay ───────────────────────────
-  if (relayActive && millis() - relayOpenedAt >= RELAY_OPEN_MS) {
-    setRelay(false);
-  }
+  // Cierre automático de relays
+  tickRelays();
 
-  // ── Polling al servidor ───────────────────────────────────
-  if (!relayActive && millis() - lastPollAt >= POLL_INTERVAL) {
+  // Polling
+  if (millis() - lastPollAt >= POLL_INTERVAL) {
     lastPollAt = millis();
-
-    bool hayComando = pollPending();
-    if (hayComando) {
-      setRelay(true);    // Abrir barrera
-      delay(300);
-      sendAck();         // Notificar al servidor
-    }
+    checkCommunity(COMMUNITY_ID);
   }
+
+  yield();
 }
