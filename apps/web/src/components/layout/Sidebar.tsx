@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -184,9 +185,9 @@ export function Sidebar() {
       {/* User footer */}
       <div className="p-4 border-t border-gray-800">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-            {user?.firstName?.[0]}{user?.lastName?.[0]}
-          </div>
+          <Avatar className="w-8 h-8 flex-shrink-0">
+            <AvatarFallback className="text-xs">{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
+          </Avatar>
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</p>
             <p className="text-xs text-gray-400 truncate">{user?.role}</p>

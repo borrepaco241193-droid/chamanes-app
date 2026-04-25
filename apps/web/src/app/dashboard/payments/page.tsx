@@ -5,8 +5,21 @@ import { useResidents, useUnits } from '@/hooks/useResidents'
 import { formatDate, formatMoney, PAYMENT_STATUS_COLOR, PAYMENT_STATUS_LABEL, fullName } from '@/lib/utils'
 import { Plus, Search, CheckCircle, Trash2, X, DollarSign, ImagePlus } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const TABS = ['ALL', 'PENDING', 'COMPLETED', 'FAILED'] as const
+
+const STATUS_BADGE: Record<string, any> = {
+  PENDING: 'warning',
+  COMPLETED: 'success',
+  FAILED: 'destructive',
+}
 
 export default function PaymentsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('ALL')
@@ -64,132 +77,126 @@ export default function PaymentsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pagos</h1>
-          <p className="text-gray-500 text-sm">Cuotas de mantenimiento y cobros</p>
+          <h1 className="text-2xl font-bold text-foreground">Pagos</h1>
+          <p className="text-muted-foreground text-sm">Cuotas de mantenimiento y cobros</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          <Plus className="w-4 h-4" /> Nuevo pago
-        </button>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="w-4 h-4 mr-2" /> Nuevo pago
+        </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              tab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {PAYMENT_STATUS_LABEL[t] ?? 'Todos'}
-            {tabCounts[t as keyof typeof tabCounts] > 0 && (
-              <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${tab === t ? 'bg-brand-100 text-brand-700' : 'bg-gray-200 text-gray-600'}`}>
-                {tabCounts[t as keyof typeof tabCounts]}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {PAYMENT_STATUS_LABEL[t] ?? 'Todos'}
+              {tabCounts[t as keyof typeof tabCounts] > 0 && (
+                <Badge variant="secondary" className="ml-1.5 text-xs px-1.5 py-0 h-4">
+                  {tabCounts[t as keyof typeof tabCounts]}
+                </Badge>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {/* Search */}
       <div className="relative w-72">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          className="input pl-9"
-          placeholder="Buscar por residente..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Buscar por residente..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="table-th">Residente</th>
-                <th className="table-th">Unidad</th>
-                <th className="table-th">Descripción</th>
-                <th className="table-th">Monto</th>
-                <th className="table-th">Vencimiento</th>
-                <th className="table-th">Período</th>
-                <th className="table-th">Estado</th>
-                <th className="table-th">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading && (
-                <tr><td colSpan={8} className="table-td text-center text-gray-400 py-8">Cargando...</td></tr>
-              )}
-              {!isLoading && payments.length === 0 && (
-                <tr><td colSpan={8} className="table-td text-center text-gray-400 py-8">
-                  <DollarSign className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                  No hay pagos para mostrar
-                </td></tr>
-              )}
-              {payments.map((p: any) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="table-td font-medium">{fullName(p.user)}</td>
-                  <td className="table-td text-gray-500">{p.unit?.number}</td>
-                  <td className="table-td">{p.description}</td>
-                  <td className="table-td font-semibold">{formatMoney(p.amount, p.currency)}</td>
-                  <td className="table-td">{formatDate(p.dueDate)}</td>
-                  <td className="table-td text-gray-500">
-                    {p.periodMonth && p.periodYear ? `${p.periodMonth}/${p.periodYear}` : '—'}
-                  </td>
-                  <td className="table-td">
-                    <span className={`badge ${PAYMENT_STATUS_COLOR[p.status]}`}>
-                      {PAYMENT_STATUS_LABEL[p.status]}
-                    </span>
-                  </td>
-                  <td className="table-td">
-                    <div className="flex items-center gap-2">
-                      {p.status === 'PENDING' && (
-                        <button
-                          onClick={() => setMarkPaidId(p.id)}
-                          className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                          title="Marcar como pagado"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </button>
-                      )}
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Residente</TableHead>
+              <TableHead>Unidad</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Monto</TableHead>
+              <TableHead>Vencimiento</TableHead>
+              <TableHead>Período</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Cargando...</TableCell></TableRow>
+            )}
+            {!isLoading && payments.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <DollarSign className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                No hay pagos para mostrar
+              </TableCell></TableRow>
+            )}
+            {payments.map((p: any) => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{fullName(p.user)}</TableCell>
+                <TableCell className="text-muted-foreground">{p.unit?.number}</TableCell>
+                <TableCell>{p.description}</TableCell>
+                <TableCell className="font-semibold">{formatMoney(p.amount, p.currency)}</TableCell>
+                <TableCell>{formatDate(p.dueDate)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {p.periodMonth && p.periodYear ? `${p.periodMonth}/${p.periodYear}` : '—'}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_BADGE[p.status] ?? 'secondary'}>
+                    {PAYMENT_STATUS_LABEL[p.status]}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {p.status === 'PENDING' && (
                       <button
-                        onClick={() => { if (confirm('¿Eliminar este pago?')) deletePayment.mutate(p.id) }}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        onClick={() => setMarkPaidId(p.id)}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Marcar como pagado"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <CheckCircle className="w-4 h-4" />
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    )}
+                    <button
+                      onClick={() => { if (confirm('¿Eliminar este pago?')) deletePayment.mutate(p.id) }}
+                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
 
       {/* Mark Paid Modal */}
-      {markPaidId && (
-        <Modal title="Registrar pago" onClose={() => setMarkPaidId(null)}>
-          <MarkPaidForm
-            paymentId={markPaidId}
-            onSubmit={(method, notes, transferProofUrl) => {
-              markPaid.mutate({ paymentId: markPaidId, method, notes, transferProofUrl }, {
-                onSuccess: () => setMarkPaidId(null),
-              })
-            }}
-            uploadProof={uploadProof}
-            loading={markPaid.isPending}
-            onCancel={() => setMarkPaidId(null)}
-          />
-        </Modal>
-      )}
+      <Dialog open={!!markPaidId} onOpenChange={(open) => { if (!open) setMarkPaidId(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar pago</DialogTitle>
+          </DialogHeader>
+          {markPaidId && (
+            <MarkPaidForm
+              paymentId={markPaidId}
+              onSubmit={(method, notes, transferProofUrl) => {
+                markPaid.mutate({ paymentId: markPaidId, method, notes, transferProofUrl }, {
+                  onSuccess: () => setMarkPaidId(null),
+                })
+              }}
+              uploadProof={uploadProof}
+              loading={markPaid.isPending}
+              onCancel={() => setMarkPaidId(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Modal */}
-      {showCreate && (
-        <Modal title="Nuevo cargo" onClose={() => setShowCreate(false)}>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuevo cargo</DialogTitle>
+          </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <label className="label">Residente</label>
@@ -217,7 +224,7 @@ export default function PaymentsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Monto (MXN)</label>
-                <input className="input" type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+                <Input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
               </div>
               <div>
                 <label className="label">Tipo</label>
@@ -231,32 +238,32 @@ export default function PaymentsPage() {
             </div>
             <div>
               <label className="label">Descripción</label>
-              <input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="label">Vencimiento</label>
-                <input className="input" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+                <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
               </div>
               <div>
                 <label className="label">Mes</label>
-                <input className="input" type="number" min="1" max="12" placeholder="1-12" value={form.periodMonth} onChange={(e) => setForm({ ...form, periodMonth: e.target.value })} />
+                <Input type="number" min="1" max="12" placeholder="1-12" value={form.periodMonth} onChange={(e) => setForm({ ...form, periodMonth: e.target.value })} />
               </div>
               <div>
                 <label className="label">Año</label>
-                <input className="input" type="number" value={form.periodYear} onChange={(e) => setForm({ ...form, periodYear: e.target.value })} />
+                <Input type="number" value={form.periodYear} onChange={(e) => setForm({ ...form, periodYear: e.target.value })} />
               </div>
             </div>
-            {createError && <p className="text-sm text-red-600">{createError}</p>}
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setShowCreate(false); setCreateError('') }} className="btn-secondary flex-1">Cancelar</button>
-              <button type="submit" disabled={createPayment.isPending} className="btn-primary flex-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { setShowCreate(false); setCreateError('') }}>Cancelar</Button>
+              <Button type="submit" disabled={createPayment.isPending} className="flex-1">
                 {createPayment.isPending ? 'Guardando...' : 'Crear cargo'}
-              </button>
+              </Button>
             </div>
           </form>
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -307,19 +314,19 @@ function MarkPaidForm({ paymentId, onSubmit, uploadProof, loading, onCancel }: {
       </div>
       <div>
         <label className="label">Notas (opcional)</label>
-        <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Número de recibo, referencia..." />
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Número de recibo, referencia..." />
       </div>
       <div>
         <label className="label">Comprobante de pago (opcional)</label>
-        <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-brand-400 transition-colors">
-          <ImagePlus className="w-5 h-5 text-gray-400" />
-          <span className="text-sm text-gray-500">{proofFile ? proofFile.name : 'Subir foto o captura de pantalla'}</span>
+        <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary transition-colors">
+          <ImagePlus className="w-5 h-5 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">{proofFile ? proofFile.name : 'Subir foto o captura de pantalla'}</span>
           <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         </label>
         {proofPreview && (
           <div className="mt-2 relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={proofPreview} alt="Comprobante" className="w-full h-32 object-cover rounded-lg border border-gray-200" />
+            <img src={proofPreview} alt="Comprobante" className="w-full h-32 object-cover rounded-lg border border-border" />
             <button
               type="button"
               onClick={() => { setProofFile(null); setProofPreview(null) }}
@@ -331,26 +338,10 @@ function MarkPaidForm({ paymentId, onSubmit, uploadProof, loading, onCancel }: {
         )}
       </div>
       <div className="flex gap-3">
-        <button onClick={onCancel} className="btn-secondary flex-1">Cancelar</button>
-        <button onClick={handleSubmit} disabled={loading || uploading} className="btn-primary flex-1">
+        <Button variant="outline" className="flex-1" onClick={onCancel}>Cancelar</Button>
+        <Button className="flex-1" onClick={handleSubmit} disabled={loading || uploading}>
           {uploading ? 'Subiendo...' : loading ? 'Guardando...' : 'Confirmar pago'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
+        </Button>
       </div>
     </div>
   )

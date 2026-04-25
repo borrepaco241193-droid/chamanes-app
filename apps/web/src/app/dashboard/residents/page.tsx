@@ -5,6 +5,12 @@ import { useAuthStore } from '@/store/auth.store'
 import { fullName, formatDate, ROLE_LABEL, ID_STATUS_COLOR, ID_STATUS_LABEL } from '@/lib/utils'
 import { Plus, Search, UserX, X, Users, Mail, Shield, KeyRound } from 'lucide-react'
 import Image from 'next/image'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const ROLE_OPTIONS = [
   { value: 'RESIDENT', label: 'Residente' },
@@ -13,6 +19,22 @@ const ROLE_OPTIONS = [
   { value: 'GUARD', label: 'Guardia' },
   { value: 'STAFF', label: 'Técnico' },
 ]
+
+const ROLE_BADGE: Record<string, any> = {
+  SUPER_ADMIN: 'destructive',
+  COMMUNITY_ADMIN: 'info',
+  MANAGER: 'info',
+  GUARD: 'warning',
+  RESIDENT: 'secondary',
+  STAFF: 'secondary',
+}
+
+const ID_BADGE: Record<string, any> = {
+  APPROVED: 'success',
+  PENDING: 'warning',
+  REJECTED: 'destructive',
+  NOT_SUBMITTED: 'secondary',
+}
 
 export default function ResidentsPage() {
   const [search, setSearch] = useState('')
@@ -63,25 +85,20 @@ export default function ResidentsPage() {
     setEditEmailResident(null)
     setNewEmail('')
   }
-  const units = unitsData?.units ?? []
+
+  const communityUnits = (unitsData?.units ?? []).filter((u: any) =>
+    !hasMultiple || !u._communityId || u._communityId === form.communityId
+  )
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', role: 'RESIDENT',
     unitId: '', occupancyType: 'OWNER', isPrimary: true, communityId: defaultCommunityId,
   })
 
-  const communityUnits = (unitsData?.units ?? []).filter((u: any) =>
-    !hasMultiple || !u._communityId || u._communityId === form.communityId
-  )
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     const { communityId, ...rest } = form
-    const result = await createResident.mutateAsync({
-      ...rest,
-      communityId,
-      unitId: form.unitId || undefined,
-    })
+    const result = await createResident.mutateAsync({ ...rest, communityId, unitId: form.unitId || undefined })
     const pwd = result?.data?.tempPassword ?? result?.tempPassword
     if (pwd) setCreatedPassword(pwd)
     else setShowCreate(false)
@@ -92,120 +109,121 @@ export default function ResidentsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Residentes</h1>
-          <p className="text-gray-500 text-sm">{residents.length} registrado{residents.length !== 1 ? 's' : ''}</p>
+          <h1 className="text-2xl font-bold text-foreground">Residentes</h1>
+          <p className="text-muted-foreground text-sm">{residents.length} registrado{residents.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          <Plus className="w-4 h-4" /> Agregar residente
-        </button>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="w-4 h-4 mr-2" /> Agregar residente
+        </Button>
       </div>
 
       <div className="relative w-72">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input className="input pl-9" placeholder="Buscar por nombre o email..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Buscar por nombre o email..." value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="table-th">Residente</th>
-                <th className="table-th">Email</th>
-                <th className="table-th">Teléfono</th>
-                <th className="table-th">Unidad</th>
-                <th className="table-th">Rol</th>
-                <th className="table-th">Verificación ID</th>
-                <th className="table-th">Desde</th>
-                <th className="table-th">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {isLoading && (
-                <tr><td colSpan={8} className="table-td text-center text-gray-400 py-8">Cargando...</td></tr>
-              )}
-              {!isLoading && residents.length === 0 && (
-                <tr><td colSpan={8} className="table-td text-center py-12">
-                  <Users className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                  <p className="text-gray-400">No hay residentes registrados</p>
-                </td></tr>
-              )}
-              {residents.map((r: any) => (
-                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="table-td">
-                    <div className="flex items-center gap-3">
-                      {r.user?.avatarUrl
-                        ? <Image src={r.user.avatarUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
-                        : <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-semibold text-brand-700">
-                          {r.user?.firstName?.[0]}{r.user?.lastName?.[0]}
-                        </div>
-                      }
-                      <span className="font-medium">{fullName(r.user)}</span>
-                    </div>
-                  </td>
-                  <td className="table-td text-gray-500">{r.user?.email ?? '—'}</td>
-                  <td className="table-td text-gray-500">{r.phone ?? r.user?.phone ?? '—'}</td>
-                  <td className="table-td">
-                    {r.units?.length > 0
-                      ? r.units.map((u: any) => (
-                        <span key={u.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700 mr-1">
-                          {u.number} {u.isPrimary && '★'}
-                        </span>
-                      ))
-                      : <span className="text-gray-400">—</span>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Residente</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Teléfono</TableHead>
+              <TableHead>Unidad</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead>ID</TableHead>
+              <TableHead>Desde</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Cargando...</TableCell></TableRow>
+            )}
+            {!isLoading && residents.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center py-12">
+                <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-muted-foreground">No hay residentes registrados</p>
+              </TableCell></TableRow>
+            )}
+            {residents.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    {r.user?.avatarUrl
+                      ? <Image src={r.user.avatarUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+                      : <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
+                        {r.user?.firstName?.[0]}{r.user?.lastName?.[0]}
+                      </div>
                     }
-                  </td>
-                  <td className="table-td">
-                    <span className="badge bg-blue-100 text-blue-800">{ROLE_LABEL[r.role] ?? r.role}</span>
-                  </td>
-                  <td className="table-td">
-                    <span className={`badge ${ID_STATUS_COLOR[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED']}`}>
-                      {ID_STATUS_LABEL[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED']}
-                    </span>
-                  </td>
-                  <td className="table-td text-gray-500">{formatDate(r.joinedAt)}</td>
-                  <td className="table-td">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT', communityId: r._communityId }); setNewRole(r.role ?? 'RESIDENT') }}
-                        className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
-                        title="Cambiar rol"
-                      >
-                        <Shield className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => { setEditEmailResident({ id: r.id, name: fullName(r.user), email: r.user?.email ?? '' }); setNewEmail(r.user?.email ?? '') }}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Cambiar correo"
-                      >
-                        <Mail className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleResetPassword(r)}
-                        className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
-                        title="Nueva contraseña temporal"
-                      >
-                        <KeyRound className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => { if (confirm(`¿Desactivar a ${fullName(r.user)}?`)) deleteResident.mutate(r.id) }}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Desactivar residente"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    <span className="font-medium">{fullName(r.user)}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{r.user?.email ?? '—'}</TableCell>
+                <TableCell className="text-muted-foreground">{r.phone ?? r.user?.phone ?? '—'}</TableCell>
+                <TableCell>
+                  {r.units?.length > 0
+                    ? r.units.map((u: any) => (
+                      <Badge key={u.id} variant="secondary" className="mr-1">
+                        {u.number} {u.isPrimary && '★'}
+                      </Badge>
+                    ))
+                    : <span className="text-muted-foreground">—</span>
+                  }
+                </TableCell>
+                <TableCell>
+                  <Badge variant={ROLE_BADGE[r.role] ?? 'secondary'}>{ROLE_LABEL[r.role] ?? r.role}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={ID_BADGE[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED'] ?? 'secondary'}>
+                    {ID_STATUS_LABEL[r.user?.idVerificationStatus ?? 'NOT_SUBMITTED']}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-muted-foreground">{formatDate(r.joinedAt)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => { setChangeRoleResident({ id: r.id, name: fullName(r.user), role: r.role ?? 'RESIDENT', communityId: r._communityId }); setNewRole(r.role ?? 'RESIDENT') }}
+                      className="p-1.5 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                      title="Cambiar rol"
+                    >
+                      <Shield className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setEditEmailResident({ id: r.id, name: fullName(r.user), email: r.user?.email ?? '' }); setNewEmail(r.user?.email ?? '') }}
+                      className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Cambiar correo"
+                    >
+                      <Mail className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleResetPassword(r)}
+                      className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg transition-colors"
+                      title="Nueva contraseña temporal"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`¿Desactivar a ${fullName(r.user)}?`)) deleteResident.mutate(r.id) }}
+                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Desactivar residente"
+                    >
+                      <UserX className="w-4 h-4" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
 
       {/* Create modal */}
-      {showCreate && (
-        <Modal title="Agregar residente" onClose={() => setShowCreate(false)}>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar residente</DialogTitle>
+          </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             {hasMultiple && (
               <div>
@@ -217,11 +235,11 @@ export default function ResidentsPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="label">Nombre</label><input className="input" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></div>
-              <div><label className="label">Apellido</label><input className="input" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></div>
+              <div><label className="label">Nombre</label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></div>
+              <div><label className="label">Apellido</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></div>
             </div>
-            <div><label className="label">Correo electrónico</label><input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
-            <div><label className="label">Teléfono</label><input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div><label className="label">Correo electrónico</label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
+            <div><label className="label">Teléfono</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Rol</label>
@@ -244,44 +262,50 @@ export default function ResidentsPage() {
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
-              <button type="submit" disabled={createResident.isPending} className="btn-primary flex-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
+              <Button type="submit" disabled={createResident.isPending} className="flex-1">
                 {createResident.isPending ? 'Guardando...' : 'Agregar'}
-              </button>
+              </Button>
             </div>
           </form>
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit email modal */}
-      {editEmailResident && (
-        <Modal title={`Cambiar correo — ${editEmailResident.name}`} onClose={() => { setEditEmailResident(null); setNewEmail('') }}>
+      <Dialog open={!!editEmailResident} onOpenChange={(open) => { if (!open) { setEditEmailResident(null); setNewEmail('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar correo — {editEmailResident?.name}</DialogTitle>
+          </DialogHeader>
           <form onSubmit={handleUpdateEmail} className="space-y-4">
             <div>
               <label className="label">Correo actual</label>
-              <p className="text-sm text-gray-500 mt-1">{editEmailResident.email || '—'}</p>
+              <p className="text-sm text-muted-foreground mt-1">{editEmailResident?.email || '—'}</p>
             </div>
             <div>
               <label className="label">Nuevo correo electrónico</label>
-              <input className="input" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+              <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setEditEmailResident(null); setNewEmail('') }} className="btn-secondary flex-1">Cancelar</button>
-              <button type="submit" disabled={updateResident.isPending} className="btn-primary flex-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { setEditEmailResident(null); setNewEmail('') }}>Cancelar</Button>
+              <Button type="submit" disabled={updateResident.isPending} className="flex-1">
                 {updateResident.isPending ? 'Guardando...' : 'Actualizar correo'}
-              </button>
+              </Button>
             </div>
           </form>
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Change role modal */}
-      {changeRoleResident && (
-        <Modal title={`Cambiar rol — ${changeRoleResident.name}`} onClose={() => { setChangeRoleResident(null); setNewRole('') }}>
+      <Dialog open={!!changeRoleResident} onOpenChange={(open) => { if (!open) { setChangeRoleResident(null); setNewRole('') } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cambiar rol — {changeRoleResident?.name}</DialogTitle>
+          </DialogHeader>
           <form onSubmit={handleChangeRole} className="space-y-4">
             <div>
               <label className="label">Rol actual</label>
-              <p className="text-sm text-gray-500 mt-1">{ROLE_LABEL[changeRoleResident.role] ?? changeRoleResident.role}</p>
+              <p className="text-sm text-muted-foreground mt-1">{ROLE_LABEL[changeRoleResident?.role ?? ''] ?? changeRoleResident?.role}</p>
             </div>
             <div>
               <label className="label">Nuevo rol</label>
@@ -291,60 +315,52 @@ export default function ResidentsPage() {
                 ))}
               </select>
             </div>
-            {roleError && <p className="text-sm text-red-600">{roleError}</p>}
+            {roleError && <p className="text-sm text-destructive">{roleError}</p>}
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => { setChangeRoleResident(null); setNewRole(''); setRoleError('') }} className="btn-secondary flex-1">Cancelar</button>
-              <button type="submit" disabled={changeRole.isPending || newRole === changeRoleResident.role} className="btn-primary flex-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { setChangeRoleResident(null); setNewRole(''); setRoleError('') }}>Cancelar</Button>
+              <Button type="submit" disabled={changeRole.isPending || newRole === changeRoleResident?.role} className="flex-1">
                 {changeRole.isPending ? 'Guardando...' : 'Cambiar rol'}
-              </button>
+              </Button>
             </div>
           </form>
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Admin reset password modal */}
-      {resetPasswordResult && (
-        <Modal title="Contraseña temporal" onClose={() => setResetPasswordResult(null)}>
+      {/* Reset password result modal */}
+      <Dialog open={!!resetPasswordResult} onOpenChange={(open) => { if (!open) setResetPasswordResult(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Contraseña temporal</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Nueva contraseña temporal para <strong>{resetPasswordResult.name}</strong>:</p>
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+            <p className="text-sm text-muted-foreground">Nueva contraseña temporal para <strong>{resetPasswordResult?.name}</strong>:</p>
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-center">
               <p className="text-xs text-amber-600 mb-1">Contraseña temporal</p>
-              <code className="text-xl font-bold text-amber-900 tracking-widest">{resetPasswordResult.password}</code>
+              <code className="text-xl font-bold text-amber-900 dark:text-amber-300 tracking-widest">{resetPasswordResult?.password}</code>
             </div>
-            <p className="text-xs text-gray-400">Comparte esta contraseña con el usuario. Deberá cambiarla al iniciar sesión.</p>
-            <button onClick={() => setResetPasswordResult(null)} className="btn-primary w-full">Entendido</button>
+            <p className="text-xs text-muted-foreground">Comparte esta contraseña con el usuario. Deberá cambiarla al iniciar sesión.</p>
+            <Button className="w-full" onClick={() => setResetPasswordResult(null)}>Entendido</Button>
           </div>
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Temp password modal */}
-      {createdPassword && (
-        <Modal title="Residente creado" onClose={() => { setCreatedPassword(null); setShowCreate(false) }}>
+      {/* Temp password modal after create */}
+      <Dialog open={!!createdPassword} onOpenChange={(open) => { if (!open) { setCreatedPassword(null); setShowCreate(false) } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Residente creado</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">El residente fue creado exitosamente. Comparte esta contraseña temporal:</p>
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-center">
+            <p className="text-sm text-muted-foreground">El residente fue creado exitosamente. Comparte esta contraseña temporal:</p>
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl text-center">
               <p className="text-xs text-blue-600 mb-1">Contraseña temporal</p>
-              <code className="text-xl font-bold text-blue-900 tracking-widest">{createdPassword}</code>
+              <code className="text-xl font-bold text-blue-900 dark:text-blue-300 tracking-widest">{createdPassword}</code>
             </div>
-            <p className="text-xs text-gray-400">El residente deberá cambiarla en su primer inicio de sesión.</p>
-            <button onClick={() => { setCreatedPassword(null); setShowCreate(false) }} className="btn-primary w-full">Entendido</button>
+            <p className="text-xs text-muted-foreground">El residente deberá cambiarla en su primer inicio de sesión.</p>
+            <Button className="w-full" onClick={() => { setCreatedPassword(null); setShowCreate(false) }}>Entendido</Button>
           </div>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-5">{children}</div>
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
