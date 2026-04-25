@@ -86,14 +86,14 @@ export default function ResidentsPage() {
     setNewEmail('')
   }
 
-  const communityUnits = (unitsData?.units ?? []).filter((u: any) =>
-    !hasMultiple || !u._communityId || u._communityId === form.communityId
-  )
-
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '', role: 'RESIDENT',
     unitId: '', occupancyType: 'OWNER', isPrimary: true, communityId: defaultCommunityId,
   })
+
+  const communityUnits = (unitsData?.units ?? []).filter((u: any) =>
+    !hasMultiple || !u._communityId || u._communityId === form.communityId
+  )
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

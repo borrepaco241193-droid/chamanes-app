@@ -90,21 +90,30 @@ export function Sidebar() {
   const selectAll = () => setActiveCommunityIds(userCommunities.map((c) => c.id))
   const isAllSelected = userCommunities.every((c) => activeCommunityIds.includes(c.id))
 
+  const [expanded, setExpanded] = useState(false)
+
   return (
-    <aside className="w-64 bg-gray-900 text-white flex flex-col h-screen sticky top-0">
+    <aside
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => { setExpanded(false); setShowCommunityPicker(false) }}
+      className={cn(
+        'bg-gray-900 text-white flex flex-col h-screen sticky top-0 overflow-hidden transition-all duration-300 ease-in-out flex-shrink-0',
+        expanded ? 'w-64' : 'w-16',
+      )}
+    >
       {/* Brand + Community Switcher */}
-      <div className="px-4 py-4 border-b border-gray-800">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="px-3 py-4 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center flex-shrink-0">
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <div className="min-w-0">
-            <p className="font-bold text-sm leading-none">Chamanes</p>
-            <p className="text-gray-400 text-xs mt-0.5">Admin Panel</p>
+          <div className={cn('min-w-0 transition-all duration-200', expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden')}>
+            <p className="font-bold text-sm leading-none whitespace-nowrap">Chamanes</p>
+            <p className="text-gray-400 text-xs mt-0.5 whitespace-nowrap">Admin Panel</p>
           </div>
         </div>
-        {showSwitcher && (
-          <div className="relative">
+        {showSwitcher && expanded && (
+          <div className="relative mt-3">
             <button
               onClick={() => setShowCommunityPicker((v) => !v)}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
@@ -123,7 +132,6 @@ export function Sidebar() {
             </button>
             {showCommunityPicker && (
               <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-gray-800 rounded-lg border border-gray-700 shadow-xl overflow-hidden">
-                {/* Select all */}
                 <button
                   onClick={selectAll}
                   className={`w-full text-left px-3 py-2 text-xs border-b border-gray-700 hover:bg-gray-700 transition-colors flex items-center gap-2 ${isAllSelected ? 'text-brand-400 font-semibold' : 'text-gray-400'}`}
@@ -155,61 +163,66 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
         {(isSuperAdmin || isCommunityAdmin) && (
           <>
-            <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              {isSuperAdmin ? 'Super Admin' : 'Administración'}
-            </p>
+            {expanded && (
+              <p className="px-3 mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                {isSuperAdmin ? 'Super Admin' : 'Administración'}
+              </p>
+            )}
             {superAdminItems.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} />
+              <NavLink key={item.href} item={item} pathname={pathname} expanded={expanded} />
             ))}
             {!isSuperAdmin && (
               <button
                 onClick={handleClaimSuperAdmin}
                 disabled={claiming}
                 className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-purple-400 hover:text-white hover:bg-purple-900/40 transition-colors"
+                title="Reclamar Super Admin"
               >
                 <Shield className="w-4 h-4 flex-shrink-0" />
-                {claiming ? 'Verificando...' : 'Reclamar Super Admin'}
+                {expanded && <span className="whitespace-nowrap">{claiming ? 'Verificando...' : 'Reclamar Super Admin'}</span>}
               </button>
             )}
             <div className="border-t border-gray-800 my-3" />
           </>
         )}
         {navItems.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
+          <NavLink key={item.href} item={item} pathname={pathname} expanded={expanded} />
         ))}
       </nav>
 
       {/* User footer */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="p-3 border-t border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-3 mb-2">
           <Avatar className="w-8 h-8 flex-shrink-0">
             <AvatarFallback className="text-xs">{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{user?.firstName} {user?.lastName}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.role}</p>
+          <div className={cn('min-w-0 transition-all duration-200', expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0 overflow-hidden')}>
+            <p className="text-sm font-medium truncate whitespace-nowrap">{user?.firstName} {user?.lastName}</p>
+            <p className="text-xs text-gray-400 truncate whitespace-nowrap">{user?.role}</p>
           </div>
         </div>
         <button
           onClick={() => { logout(); window.location.href = '/login' }}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          className="w-full flex items-center gap-3 px-2 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+          title="Cerrar sesión"
         >
-          <LogOut className="w-4 h-4" />
-          Cerrar sesión
+          <LogOut className="w-4 h-4 flex-shrink-0" />
+          {expanded && <span className="whitespace-nowrap">Cerrar sesión</span>}
         </button>
       </div>
     </aside>
   )
 }
 
-function NavLink({ item, pathname }: { item: typeof navItems[0]; pathname: string }) {
+function NavLink({ item, pathname, expanded }: { item: typeof navItems[0]; pathname: string; expanded: boolean }) {
   const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
   return (
     <Link
       href={item.href}
+      title={!expanded ? item.label : undefined}
       className={cn(
         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
         isActive
@@ -218,7 +231,7 @@ function NavLink({ item, pathname }: { item: typeof navItems[0]; pathname: strin
       )}
     >
       <item.icon className="w-4 h-4 flex-shrink-0" />
-      {item.label}
+      {expanded && <span className="whitespace-nowrap">{item.label}</span>}
     </Link>
   )
 }
