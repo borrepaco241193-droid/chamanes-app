@@ -73,35 +73,33 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   // Android requires notification channels — one per urgency level
   if (Platform.OS === 'android') {
-    // Default channel — payments, reservations, announcements
-    await Notifications.setNotificationChannelAsync('default', {
+    // v2 channels: recreated with sound enabled (old channels had sound: false)
+    await Notifications.setNotificationChannelAsync('default_v2', {
       name: 'Chamanes',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#3B82F6',
-      sound: false,
+      sound: 'default',
     })
 
-    // Visitor alarm channel — high importance + alarm sound
-    await Notifications.setNotificationChannelAsync('visitor_alarm', {
+    await Notifications.setNotificationChannelAsync('visitor_alarm_v2', {
       name: 'Visitas en puerta',
       description: 'Alertas cuando llega un visitante a tu unidad',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 400, 200, 400, 200, 400],
       lightColor: '#22C55E',
-      sound: false,
+      sound: 'default',
       bypassDnd: false,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     })
 
-    // Work order urgent channel
-    await Notifications.setNotificationChannelAsync('work_order_urgent', {
+    await Notifications.setNotificationChannelAsync('work_order_urgent_v2', {
       name: 'Órdenes urgentes',
       description: 'Órdenes de trabajo con prioridad urgente o alta',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 300, 150, 300],
       lightColor: '#EF4444',
-      sound: false,
+      sound: 'default',
     })
   }
 
@@ -110,7 +108,9 @@ export async function registerForPushNotifications(): Promise<string | null> {
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId: '54edd6d7-1120-4360-a153-154b1f178ba5',
     })
+    console.log('[Notifications] Push token:', tokenData.data)
     await notificationService.registerPushToken(tokenData.data)
+    console.log('[Notifications] Token registered with backend ✓')
     return tokenData.data
   } catch (err) {
     console.warn('[Notifications] Failed to register push token:', err)

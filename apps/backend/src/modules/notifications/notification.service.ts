@@ -110,9 +110,9 @@ export async function sendPushNotification(
 
   // Pick Android channel based on notification type
   const channelId =
-    type === 'visitor_arrived' ? 'visitor_alarm' :
-    type === 'work_order' ? 'work_order_urgent' :
-    'default'
+    type === 'visitor_arrived' ? 'visitor_alarm_v2' :
+    type === 'work_order' ? 'work_order_urgent_v2' :
+    'default_v2'
 
   await Promise.allSettled([
     fcmTokens.length > 0 && isFirebaseConfigured()
@@ -149,7 +149,7 @@ async function deliverViaExpo(
   title: string,
   body: string,
   data: Record<string, string>,
-  channelId = 'default',
+  channelId = 'default_v2',
 ): Promise<void> {
   try {
     const messages = tokens.map((to) => ({
@@ -159,10 +159,10 @@ async function deliverViaExpo(
       data,
       sound: 'default',
       channelId,
-      priority: channelId === 'visitor_alarm' ? 'high' : 'default',
+      priority: 'high',
     }))
 
-    await fetch('https://exp.host/--/api/v2/push/send', {
+    const res = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -171,6 +171,14 @@ async function deliverViaExpo(
       },
       body: JSON.stringify(messages),
     })
+
+    const result = await res.json() as any
+    const tickets = Array.isArray(result?.data) ? result.data : [result]
+    for (const ticket of tickets) {
+      if (ticket?.status === 'error') {
+        console.error('[Expo Push] Ticket error:', ticket.message, ticket.details)
+      }
+    }
   } catch (err) {
     console.error('[Expo Push] Delivery error:', err)
   }
